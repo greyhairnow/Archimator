@@ -2,3 +2,5 @@ fitz
 pymupdf
 pillow
 matplotlib
+numpy
+pandas

@@ -32,7 +32,7 @@ Features:
 
 Note: This script requires Tkinter to be installed.  It cannot run in
 headless environments (such as this sandbox) where a GUI cannot be created.
-Run it locally on a system with a graphical desktop.
+Run it locally on a system with a graphical desktop. 
 """
 
 import json
