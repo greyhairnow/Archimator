@@ -5,7 +5,7 @@ from typing import Optional, TYPE_CHECKING
 
 try:
     import tkinter as tk
-    from tkinter import simpledialog, messagebox
+    from tkinter import simpledialog, messagebox, ttk
 except Exception:  # pragma: no cover
     tk = None  # type: ignore
     simpledialog = None  # type: ignore
@@ -70,18 +70,59 @@ def cancel_scale_mode(app: "MeasureAppGUI") -> None:
     app.redraw()
 
 
-def _prompt_scale_unit(app: "MeasureAppGUI") -> Optional[str]:
-    if simpledialog is None:
-        return "units"
-    while True:
-        unit = simpledialog.askstring("Set Unit/Scale", "Enter units (e.g., m, cm, ft, in):")
-        if unit is None:
-            return None
-        unit = unit.strip()
-        if unit:
-            return unit
-        if messagebox:
-            messagebox.showerror("Set Unit/Scale", "Unit is required.")
+def _prompt_scale_unit(app: "MeasureAppGUI") -> Optional[tuple[str, float]]:
+    """Show a single dialog to choose unit and enter length; returns (unit, length)."""
+    if simpledialog is None or tk is None:
+        return ("units", 1.0)
+
+    class UnitLengthDialog(simpledialog.Dialog):
+        def __init__(self, parent, title: str = "Set Unit/Scale"):
+            self.selected_unit: Optional[str] = None
+            self.entered_length: Optional[float] = None
+            super().__init__(parent, title)
+
+        def body(self, master):
+            tk.Label(master, text="Unit:").grid(row=0, column=0, sticky="e", padx=6, pady=6)
+            tk.Label(master, text="Length:").grid(row=1, column=0, sticky="e", padx=6, pady=6)
+
+            units = ["mm", "cm", "m", "in", "ft", "yd", "km", "mi"]
+            self.unit_var = tk.StringVar(value="m")
+            self.unit_combo = ttk.Combobox(master, textvariable=self.unit_var, values=units, state="readonly", width=8)
+            self.unit_combo.grid(row=0, column=1, sticky="w", padx=6, pady=6)
+            self.unit_combo.current(2)
+
+            self.len_var = tk.StringVar(value="1.0")
+            self.len_entry = tk.Entry(master, textvariable=self.len_var, width=12)
+            self.len_entry.grid(row=1, column=1, sticky="w", padx=6, pady=6)
+            return self.len_entry
+
+        def validate(self):
+            unit = self.unit_var.get().strip()
+            if not unit:
+                if messagebox:
+                    messagebox.showerror("Set Unit/Scale", "Please choose a unit.")
+                return False
+            try:
+                length = float(self.len_var.get())
+            except ValueError:
+                if messagebox:
+                    messagebox.showerror("Set Unit/Scale", "Enter a numeric value for the length.")
+                return False
+            if length <= 0:
+                if messagebox:
+                    messagebox.showerror("Set Unit/Scale", "Length must be greater than zero.")
+                return False
+            self.selected_unit = unit
+            self.entered_length = length
+            return True
+
+        def apply(self):
+            pass
+
+    dlg = UnitLengthDialog(app.root)
+    if dlg.selected_unit is None or dlg.entered_length is None:
+        return None
+    return dlg.selected_unit, dlg.entered_length
 
 
 def _prompt_scale_length(app: "MeasureAppGUI", unit: str) -> Optional[float]:
@@ -173,14 +214,11 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
                                fill='purple', outline='black', width=2)
         app.canvas.create_oval(px2_canvas - 8, py2_canvas - 8, px2_canvas + 8, py2_canvas + 8,
                                fill='purple', outline='black', width=2)
-        unit = _prompt_scale_unit(app)
-        if unit is None:
+        unit_len = _prompt_scale_unit(app)
+        if unit_len is None:
             cancel_scale_mode(app)
             return True
-        real_len = _prompt_scale_length(app, unit)
-        if real_len is None:
-            cancel_scale_mode(app)
-            return True
+        unit, real_len = unit_len
         app.scale_factor = real_len / pixel_dist
         app.scale_unit = unit
         app.scale_label.config(text=f"Scale: {app.scale_factor:.4f} {app.scale_unit}/pixel")
@@ -197,4 +235,3 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
         app.redraw()
         return True
     return False
-
