@@ -14,6 +14,26 @@ except Exception:  # pragma: no cover
 if TYPE_CHECKING:
     from .gui_client import MeasureAppGUI
 
+# ---------- Visual Style Configuration ----------
+# Rubber-band (preview) line drawn between first point and mouse pointer
+PREVIEW_LINE_COLOR: str = 'blue'
+PREVIEW_LINE_WIDTH: int = 4  # thicker for visibility
+PREVIEW_LINE_DASH: tuple[int, int] = (4, 4)
+
+# First-click marker (Point A)
+MARKER_FILL: str = 'blue'
+MARKER_OUTLINE: str = 'black'
+MARKER_RADIUS: int = 12
+MARKER_OUTLINE_WIDTH: int = 3
+
+# Final, persistent scale line and endpoints
+PERSISTENT_LINE_COLOR: str = 'purple'
+PERSISTENT_LINE_WIDTH: int = 4
+PERSISTENT_LINE_DASH: tuple[int, int] = (6, 2)
+PERSISTENT_ENDPOINT_RADIUS: int = 8
+PERSISTENT_ENDPOINT_OUTLINE: str = 'black'
+PERSISTENT_ENDPOINT_FILL: str = 'purple'
+
 
 def set_scale_mode(app: "MeasureAppGUI") -> None:
     if app.image is None:
@@ -161,7 +181,7 @@ def scale_on_motion(app: "MeasureAppGUI", event) -> None:
         if app.scale_preview_line_id is None:
             app.scale_preview_line_id = app.canvas.create_line(
                 x1, y1, x2, y2,
-                fill='blue', width=2, dash=(4, 4)
+                fill=PREVIEW_LINE_COLOR, width=PREVIEW_LINE_WIDTH, dash=PREVIEW_LINE_DASH
             )
         else:
             app.canvas.coords(app.scale_preview_line_id, x1, y1, x2, y2)
@@ -183,8 +203,8 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
         px *= app.zoom_level
         py *= app.zoom_level
         app.scale_marker_id = app.canvas.create_oval(
-            px - 12, py - 12, px + 12, py + 12,
-            fill='blue', outline='black', width=3
+            px - MARKER_RADIUS, py - MARKER_RADIUS, px + MARKER_RADIUS, py + MARKER_RADIUS,
+            fill=MARKER_FILL, outline=MARKER_OUTLINE, width=MARKER_OUTLINE_WIDTH
         )
         app.redraw()
         return True
@@ -208,12 +228,22 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
             return True
         app.scale_line_id = app.canvas.create_line(
             px1_canvas, py1_canvas, px2_canvas, py2_canvas,
-            fill='purple', width=4, dash=(6, 2)
+            fill=PERSISTENT_LINE_COLOR, width=PERSISTENT_LINE_WIDTH, dash=PERSISTENT_LINE_DASH
         )
-        app.canvas.create_oval(px1_canvas - 8, py1_canvas - 8, px1_canvas + 8, py1_canvas + 8,
-                               fill='purple', outline='black', width=2)
-        app.canvas.create_oval(px2_canvas - 8, py2_canvas - 8, px2_canvas + 8, py2_canvas + 8,
-                               fill='purple', outline='black', width=2)
+        app.canvas.create_oval(
+            px1_canvas - PERSISTENT_ENDPOINT_RADIUS,
+            py1_canvas - PERSISTENT_ENDPOINT_RADIUS,
+            px1_canvas + PERSISTENT_ENDPOINT_RADIUS,
+            py1_canvas + PERSISTENT_ENDPOINT_RADIUS,
+            fill=PERSISTENT_ENDPOINT_FILL, outline=PERSISTENT_ENDPOINT_OUTLINE, width=2
+        )
+        app.canvas.create_oval(
+            px2_canvas - PERSISTENT_ENDPOINT_RADIUS,
+            py2_canvas - PERSISTENT_ENDPOINT_RADIUS,
+            px2_canvas + PERSISTENT_ENDPOINT_RADIUS,
+            py2_canvas + PERSISTENT_ENDPOINT_RADIUS,
+            fill=PERSISTENT_ENDPOINT_FILL, outline=PERSISTENT_ENDPOINT_OUTLINE, width=2
+        )
         unit_len = _prompt_scale_unit(app)
         if unit_len is None:
             cancel_scale_mode(app)

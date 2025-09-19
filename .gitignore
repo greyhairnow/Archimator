@@ -1,2 +1,3 @@
 .venv/*
 app/src/app/__pycache__/*
+app/src/app/__pycache__/scale.cpython-311.pyc
