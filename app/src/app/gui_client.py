@@ -35,13 +35,41 @@ headless environments (such as this sandbox) where a GUI cannot be created.
 Run it locally on a system with a graphical desktop. 
 """
 
+import importlib
+import importlib.util
 import json
 import math
 import os
+import sys
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
-import fitz  # PyMuPDF
+# Ensure required third-party packages are available before proceeding.
+REQUIRED_PACKAGES = {
+    "pymupdf": "pymupdf",
+    "PIL": "pillow",
+    "matplotlib": "matplotlib",
+}
+
+missing_packages = [
+    package_name
+    for module_name, package_name in REQUIRED_PACKAGES.items()
+    if importlib.util.find_spec(module_name) is None
+]
+
+if missing_packages:
+    unique = sorted(set(missing_packages))
+    package_list = " ".join(unique)
+    message = (
+        "Missing required packages: "
+        + ", ".join(unique)
+        + "\nInstall them with: pip install "
+        + package_list
+    )
+    print(message, file=sys.stderr)
+    raise SystemExit(1)
+
+import pymupdf as fitz  # Alias to retain existing usage
 from PIL import Image
 
 try:
@@ -226,12 +254,14 @@ class MeasureAppGUI:
         # Motion event for zoom preview (enabled only in drawing/scale modes).
         self.canvas.bind("<Motion>", self.on_canvas_motion)
         # Dragging vertices (left button press, move and release) outside of draw/scale mode.
-        self.canvas.bind("<ButtonPress-1>", self.on_drag_start)
+        # Use add='+' to avoid overwriting the existing <Button-1> binding
+        self.canvas.bind("<ButtonPress-1>", self.on_drag_start, add="+")
         self.canvas.bind("<B1-Motion>", self.on_drag_move)
         self.canvas.bind("<ButtonRelease-1>", self.on_drag_end)
         # Data structures and state variables.
         self.image: Optional[Image.Image] = None  # Original PDF page (resized to fit)
         self.photo: Optional[ImageTk.PhotoImage] = None  # PhotoImage for Tkinter display
+        self.display_image: Optional[Image.Image] = None  # PIL image currently shown on canvas (after rotation/zoom)
         self.polygons: List[PolygonData] = []  # Completed polygons
         self.current_polygon: List[Tuple[float, float]] = []  # Points of polygon being drawn
         self.draw_mode: bool = False  # True when drawing a new polygon
@@ -315,6 +345,8 @@ class MeasureAppGUI:
                 resample = Image.LANCZOS
             img = img.resize(new_size, resample)
         self.photo = ImageTk.PhotoImage(img)
+        self.display_image = img
+        self.display_image = img
         # Update canvas scroll region
         self.canvas.config(scrollregion=(0, 0, img.width, img.height))
         # Transform existing polygons and scale points only when rotation
@@ -386,6 +418,7 @@ class MeasureAppGUI:
             resample = Image.LANCZOS
         img = img.resize(new_size, resample)
         self.photo = ImageTk.PhotoImage(img)
+        self.display_image = img
         # Update scroll region for panning
         self.canvas.config(scrollregion=(0, 0, img.width, img.height))
         # Redraw contents at new zoom level
@@ -501,7 +534,8 @@ class MeasureAppGUI:
             self.canvas.delete(self.scale_line_id)
             self.scale_line_id = None
         self.clear_scale_preview()
-        self.canvas.config(cursor="target")
+        # Use a portable cursor name across platforms
+        self.canvas.config(cursor="crosshair")
         self.root.bind("<Escape>", self.cancel_scale_mode)
         messagebox.showinfo(
             "Set Unit/Scale",
@@ -604,8 +638,8 @@ class MeasureAppGUI:
                 px *= self.zoom_level
                 py *= self.zoom_level
                 self.scale_marker_id = self.canvas.create_oval(
-                    px - 10, py - 10, px + 10, py + 10,
-                    fill='purple', outline='black', width=3
+                    px - 12, py - 12, px + 12, py + 12,
+                    fill='blue', outline='black', width=3
                 )
                 # Redraw to overlay marker on image
                 self.redraw()
@@ -853,17 +887,34 @@ class MeasureAppGUI:
         """Display a small window showing a magnified area around the pointer."""
         if self.image is None:
             return
-        # Convert pointer coords to image space (accounting for panning via canvasx/canvasy)
-        img_x = int(self.canvas.canvasx(x) / self.zoom_level)
-        img_y = int(self.canvas.canvasy(y) / self.zoom_level)
-        # Define region around pointer (50x50 pixels from original image)
-        region_size = 50
+        # Use the actual displayed image (rotation + zoom applied) for precise preview
+        src = self.display_image if self.display_image is not None else self.image
+        if src is None:
+            return
+        # Convert pointer coords to displayed image space (accounting for pan via canvasx/canvasy)
+        img_x = int(self.canvas.canvasx(x))
+        img_y = int(self.canvas.canvasy(y))
+        # Clamp the centre to valid image bounds to avoid invalid crops at edges
+        w, h = src.size
+        if w <= 0 or h <= 0:
+            return
+        img_x = max(0, min(img_x, w - 1))
+        img_y = max(0, min(img_y, h - 1))
+        # Define region around pointer (square region from original image)
+        region_size = max(20, min(80, self.zoom_preview_size // 2 * 2))  # keep reasonable size
         half = region_size // 2
         left = max(img_x - half, 0)
         upper = max(img_y - half, 0)
-        right = min(img_x + half, self.image.width)
-        lower = min(img_y + half, self.image.height)
-        crop = self.image.crop((left, upper, right, lower))
+        right = min(img_x + half, w)
+        lower = min(img_y + half, h)
+        # Ensure valid crop box even at the borders
+        if right <= left:
+            right = min(left + 1, w)
+            left = max(0, right - 1)
+        if lower <= upper:
+            lower = min(upper + 1, h)
+            upper = max(0, lower - 1)
+        crop = src.crop((left, upper, right, lower))
         # Resize to preview window size using nearest neighbour for crispness
         zoomed = crop.resize(
             (self.zoom_preview_size, self.zoom_preview_size),
@@ -912,7 +963,7 @@ class MeasureAppGUI:
             if self.scale_preview_line_id is None:
                 self.scale_preview_line_id = self.canvas.create_line(
                     x1, y1, x2, y2,
-                    fill='purple', width=2, dash=(2, 4)
+                    fill='blue', width=2, dash=(4, 4)
                 )
             else:
                 self.canvas.coords(self.scale_preview_line_id, x1, y1, x2, y2)
@@ -939,12 +990,12 @@ class MeasureAppGUI:
                                     fill='purple', outline='black', width=2)
             self.canvas.create_oval(x2_canvas - 8, y2_canvas - 8, x2_canvas + 8, y2_canvas + 8,
                                     fill='purple', outline='black', width=2)
-        # Draw marker for first scale point if still awaiting second point
-        elif self.scale_mode and len(self.scale_points) == 1:
+        # Draw marker for first scale point if still awaiting second point (in addition to any existing artifact)
+        if self.scale_mode and len(self.scale_points) == 1:
             px, py = self.scale_points[0]
             px_canvas, py_canvas = px * self.zoom_level, py * self.zoom_level
-            self.canvas.create_oval(px_canvas - 10, py_canvas - 10, px_canvas + 10, py_canvas + 10,
-                                    fill='purple', outline='black', width=3)
+            self.canvas.create_oval(px_canvas - 12, py_canvas - 12, px_canvas + 12, py_canvas + 12,
+                                    fill='blue', outline='black', width=3)
         # Draw completed polygons
         for idx, poly in enumerate(self.polygons):
             coords = []
