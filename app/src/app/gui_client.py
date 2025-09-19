@@ -85,6 +85,16 @@ matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 
+def _import_app_module(mod_name: str):
+    """Import a sibling module whether running as package or as script."""
+    try:
+        if __package__:
+            return importlib.import_module(f"{__package__}.{mod_name}")
+        return importlib.import_module(mod_name)
+    except Exception:
+        # Final fallback to absolute name
+        return importlib.import_module(mod_name)
+
 
 def pdf_page_to_image(pdf_path: str, page_number: int = 0) -> Image.Image:
     """Load the specified page of a PDF and convert it to a PIL Image."""
@@ -139,62 +149,20 @@ def generate_3d_image(polygons: List[List[Tuple[float, float]]], height: float =
     return img
 
 
-def shoelace_area(points: List[Tuple[float, float]]) -> float:
-    """Return the absolute area of a polygon using the shoelace formula."""
-    if len(points) < 3:
-        return 0.0
-    area = 0.0
-    n = len(points)
-    for i in range(n):
-        x1, y1 = points[i]
-        x2, y2 = points[(i + 1) % n]
-        area += x1 * y2 - x2 * y1
-    return abs(area) / 2.0
-
-
-def polygon_perimeter(points: List[Tuple[float, float]]) -> float:
-    """Return the perimeter length of a polygon."""
-    if len(points) < 2:
-        return 0.0
-    perim = 0.0
-    n = len(points)
-    for i in range(n):
-        x1, y1 = points[i]
-        x2, y2 = points[(i + 1) % n]
-        perim += math.hypot(x2 - x1, y2 - y1)
-    return perim
-
-
-def point_in_polygon(pt: Tuple[float, float], polygon: List[Tuple[float, float]]) -> bool:
-    """Ray casting algorithm to determine if a point lies within a polygon."""
-    x, y = pt
-    inside = False
-    n = len(polygon)
-    if n < 3:
-        return False
-    p1x, p1y = polygon[0]
-    for i in range(n + 1):
-        p2x, p2y = polygon[i % n]
-        if min(p1y, p2y) < y <= max(p1y, p2y) and x <= max(p1x, p2x):
-            if p1y != p2y:
-                xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-            if p1x == p2x or x <= xinters:
-                inside = not inside
-        p1x, p1y = p2x, p2y
-    return inside
-
-
-@dataclass
-class PolygonData:
-    points: List[Tuple[float, float]] = field(default_factory=list)
-    area_px: float = 0.0
-    perimeter_px: float = 0.0
-    metadata: dict = field(default_factory=dict)
-
-    def compute_metrics(self) -> None:
-        """Recompute area and perimeter in pixel units."""
-        self.area_px = shoelace_area(self.points)
-        self.perimeter_px = polygon_perimeter(self.points)
+if __package__:
+    from .model import (
+        PolygonData,
+        shoelace_area,
+        polygon_perimeter,
+        point_in_polygon,
+    )
+else:
+    from model import (
+        PolygonData,
+        shoelace_area,
+        polygon_perimeter,
+        point_in_polygon,
+    )
 
 
 class MeasureAppGUI:
@@ -237,8 +205,8 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Export CSV", command=self.export_csv).pack(fill=tk.X)
         tk.Button(side_frame, text="3D View", command=self.show_3d_view).pack(fill=tk.X)
         tk.Button(side_frame, text="Optimize Panels", command=self.optimize_panels).pack(fill=tk.X)
-        tk.Button(side_frame, text="Straighten Polygon", command=self.straighten_polygon).pack(fill=tk.X)
-        tk.Button(side_frame, text="Undo Straighten", command=self.undo_straighten).pack(fill=tk.X)
+        tk.Button(side_frame, text="Straighten Polygon", command=lambda: _import_app_module('straighten').straighten_polygon(self)).pack(fill=tk.X)
+        tk.Button(side_frame, text="Undo Straighten", command=lambda: _import_app_module('straighten').undo_straighten(self)).pack(fill=tk.X)
         # Labels to display the current scale and selection info.
         self.scale_unit = "units"
         self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")
@@ -517,65 +485,20 @@ class MeasureAppGUI:
 
     # ----- Mode Selection -----
     def set_scale_mode(self) -> None:
-        """Enter scale definition mode. The user will pick two points representing a known distance."""
-        if self.image is None:
-            messagebox.showwarning("Warning", "Load a PDF first.")
-            return
-        # Enable scale mode and disable draw mode
-        self.scale_mode = True
-        self.draw_mode = False
-        # Clear existing scale points and transient artifacts
-        self.scale_points.clear()
-        # Remove any existing scale markers/lines from canvas
-        if self.scale_marker_id is not None:
-            self.canvas.delete(self.scale_marker_id)
-            self.scale_marker_id = None
-        if self.scale_line_id is not None:
-            self.canvas.delete(self.scale_line_id)
-            self.scale_line_id = None
-        self.clear_scale_preview()
-        # Use a portable cursor name across platforms
-        self.canvas.config(cursor="crosshair")
-        self.root.bind("<Escape>", self.cancel_scale_mode)
-        messagebox.showinfo(
-            "Set Unit/Scale",
-            "Click two points on a known distance.\n"
-            "A target cursor will appear for precise placement.\n"
-            "Press Esc at any time to cancel."
-        )
-        # Bind motion events to show zoom preview while selecting scale
-        self.canvas.bind("<Motion>", self.on_canvas_motion)
+        scale_mod = _import_app_module('scale')
+        scale_mod.set_scale_mode(self)
 
     def clear_scale_preview(self) -> None:
-        """Remove the temporary rubber-band line used while selecting scale points."""
-        if self.scale_preview_line_id is not None:
-            self.canvas.delete(self.scale_preview_line_id)
-            self.scale_preview_line_id = None
+        scale_mod = _import_app_module('scale')
+        scale_mod.clear_scale_preview(self)
 
     def exit_scale_mode(self) -> None:
-        """Common cleanup executed when leaving scale mode."""
-        self.scale_mode = False
-        self.canvas.config(cursor="")
-        self.clear_scale_preview()
-        self.hide_zoom_preview()
-        self.root.unbind("<Escape>")
-        # Temporary scale line re-rendered via redraw; drop any stale canvas IDs.
-        self.scale_line_id = None
-        self.scale_marker_id = None
+        scale_mod = _import_app_module('scale')
+        scale_mod.exit_scale_mode(self)
 
     def cancel_scale_mode(self, event=None) -> None:
-        """Cancel scale selection without modifying the existing scale."""
-        if not self.scale_mode:
-            return
-        if self.scale_marker_id is not None:
-            self.canvas.delete(self.scale_marker_id)
-            self.scale_marker_id = None
-        if self.scale_line_id is not None:
-            self.canvas.delete(self.scale_line_id)
-            self.scale_line_id = None
-        self.scale_points.clear()
-        self.exit_scale_mode()
-        self.redraw()
+        scale_mod = _import_app_module('scale')
+        scale_mod.cancel_scale_mode(self)
 
     def _prompt_scale_unit(self) -> Optional[str]:
         """Prompt the user for the unit label; return None if cancelled."""
@@ -606,16 +529,8 @@ class MeasureAppGUI:
             return real_len
 
     def set_draw_mode(self) -> None:
-        """Enter polygon drawing mode to outline rooms."""
-        if self.image is None:
-            messagebox.showwarning("Warning", "Load a PDF first.")
-            return
-        self.draw_mode = True
-        self.scale_mode = False
-        self.current_polygon.clear()
-        messagebox.showinfo("Draw Polygon", "Click points to define the polygon. Click near the first point to finish.")
-        # Bind motion events to show zoom preview while drawing
-        self.canvas.bind("<Motion>", self.on_canvas_motion)
+        draw_mod = _import_app_module('draw')
+        draw_mod.set_draw_mode(self)
 
     # ----- Canvas Click Handling -----
     def on_canvas_click(self, event) -> None:
@@ -626,92 +541,16 @@ class MeasureAppGUI:
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         # Scale mode: collect two points and compute scale factor
+        scale_mod = _import_app_module('scale')
         if self.scale_mode:
-            # Append the point (convert from display to image coordinates by dividing by zoom)
-            self.scale_points.append((x / self.zoom_level, y / self.zoom_level))
-            # If it's the first point, draw a large marker
-            if len(self.scale_points) == 1:
-                # Remove any previous marker
-                if self.scale_marker_id is not None:
-                    self.canvas.delete(self.scale_marker_id)
-                px, py = self.scale_points[0]
-                px *= self.zoom_level
-                py *= self.zoom_level
-                self.scale_marker_id = self.canvas.create_oval(
-                    px - 12, py - 12, px + 12, py + 12,
-                    fill='blue', outline='black', width=3
-                )
-                # Redraw to overlay marker on image
-                self.redraw()
+            if scale_mod.scale_on_canvas_click(self, event):
                 return
-            # Second point: draw persistent scale line and ask user for real length
-            if len(self.scale_points) == 2:
-                px1, py1 = self.scale_points[0]
-                px2, py2 = self.scale_points[1]
-                # Coordinates in canvas space for drawing
-                px1_canvas, py1_canvas = px1 * self.zoom_level, py1 * self.zoom_level
-                px2_canvas, py2_canvas = px2 * self.zoom_level, py2 * self.zoom_level
-                # Remove the first marker
-                if self.scale_marker_id is not None:
-                    self.canvas.delete(self.scale_marker_id)
-                    self.scale_marker_id = None
-                self.clear_scale_preview()
-                dx = px2 - px1
-                dy = py2 - py1
-                pixel_dist = math.hypot(dx, dy)
-                if pixel_dist == 0:
-                    messagebox.showerror("Set Unit/Scale", "Select two distinct points to set the scale.")
-                    self.scale_points.clear()
-                    self.redraw()
-                    return
-                # Draw dashed line and end circles for scale reference
-                self.scale_line_id = self.canvas.create_line(
-                    px1_canvas, py1_canvas, px2_canvas, py2_canvas,
-                    fill='purple', width=4, dash=(6, 2)
-                )
-                self.canvas.create_oval(px1_canvas - 8, py1_canvas - 8, px1_canvas + 8, py1_canvas + 8,
-                                        fill='purple', outline='black', width=2)
-                self.canvas.create_oval(px2_canvas - 8, py2_canvas - 8, px2_canvas + 8, py2_canvas + 8,
-                                        fill='purple', outline='black', width=2)
-                unit = self._prompt_scale_unit()
-                if unit is None:
-                    self.cancel_scale_mode()
-                    return
-                real_len = self._prompt_scale_length(unit)
-                if real_len is None:
-                    self.cancel_scale_mode()
-                    return
-                self.scale_factor = real_len / pixel_dist
-                self.scale_unit = unit
-                self.scale_label.config(text=f"Scale: {self.scale_factor:.4f} {self.scale_unit}/pixel")
-                # Store the scale artifact for persistent display
-                self.scale_artifact = {
-                    'points': self.scale_points.copy(),
-                    'real_length': real_len,
-                    'pixel_length': pixel_dist,
-                    'unit': self.scale_unit,
-                    'scale_factor': self.scale_factor
-                }
-                self.scale_points.clear()
-                self.exit_scale_mode()
-                self.update_info_label()
-                # Redraw so the persistent scale line is integrated into the canvas
-                self.redraw()
             return
         # Draw mode: build up points for a new polygon
         if self.draw_mode:
-            # Append point in image coordinates (divide by zoom)
-            self.current_polygon.append((x / self.zoom_level, y / self.zoom_level))
-            # If user clicks near the first point and at least three points exist, close polygon
-            if len(self.current_polygon) >= 3:
-                fx, fy = self.current_polygon[0]
-                if abs((x / self.zoom_level) - fx) < 5 and abs((y / self.zoom_level) - fy) < 5:
-                    # Replace last point with the first to close the loop
-                    self.current_polygon[-1] = (fx, fy)
-                    self.finish_polygon()
-                    return
-            self.redraw()
-            return
+            draw_mod = _import_app_module('draw')
+            if draw_mod.draw_on_canvas_click(self, event):
+                return
         # Not in draw or scale mode: selection of an existing polygon
         self.selected_polygon = None
         # Convert click to image coordinates for point‑in‑polygon test
@@ -727,23 +566,8 @@ class MeasureAppGUI:
 
     # ----- Polygon Completion -----
     def finish_polygon(self) -> None:
-        """Finalize the current polygon, compute metrics, prompt metadata and store it."""
-        if len(self.current_polygon) < 3:
-            self.current_polygon.clear()
-            return
-        poly = PolygonData(points=self.current_polygon.copy())
-        poly.compute_metrics()
-        room_id = simpledialog.askstring("Metadata", "Enter Room ID:") or ''
-        room_name = simpledialog.askstring("Metadata", "Enter Room Name:") or ''
-        poly.metadata = {'id': room_id, 'name': room_name}
-        self.polygons.append(poly)
-        self.current_polygon.clear()
-        # Exit draw mode
-        self.draw_mode = False
-        # Select the newly created polygon
-        self.selected_polygon = len(self.polygons) - 1
-        self.update_info_label()
-        self.redraw()
+        draw_mod = _import_app_module('draw')
+        draw_mod.finish_polygon(self)
 
     # ----- Dragging Polygon Vertices -----
     def on_drag_start(self, event) -> None:
@@ -947,28 +771,8 @@ class MeasureAppGUI:
             self.zoom_preview_label = None
 
     def on_canvas_motion(self, event) -> None:
-        """Handle mouse motion events to show zoom preview when appropriate."""
-        # Show preview only during scale or draw mode
-        if not (self.scale_mode or self.draw_mode):
-            self.hide_zoom_preview()
-            self.clear_scale_preview()
-            return
-        self.show_zoom_preview(event.x, event.y)
-        if self.scale_mode and len(self.scale_points) == 1:
-            px, py = self.scale_points[0]
-            x1 = px * self.zoom_level
-            y1 = py * self.zoom_level
-            x2 = self.canvas.canvasx(event.x)
-            y2 = self.canvas.canvasy(event.y)
-            if self.scale_preview_line_id is None:
-                self.scale_preview_line_id = self.canvas.create_line(
-                    x1, y1, x2, y2,
-                    fill='blue', width=2, dash=(4, 4)
-                )
-            else:
-                self.canvas.coords(self.scale_preview_line_id, x1, y1, x2, y2)
-        else:
-            self.clear_scale_preview()
+        scale_mod = _import_app_module('scale')
+        scale_mod.scale_on_motion(self, event)
 
     # ----- Drawing and Display -----
     def redraw(self) -> None:
@@ -1054,98 +858,18 @@ class MeasureAppGUI:
 
     # ----- Exporting Data -----
     def export_csv(self) -> None:
-        """Export measurements and metadata for all polygons to a CSV file."""
-        if not self.polygons:
-            messagebox.showwarning("Warning", "No polygons to export.")
-            return
-        path = filedialog.asksaveasfilename(title="Save CSV", defaultextension='.csv', filetypes=[("CSV files", "*.csv")])
-        if not path:
-            return
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                f.write('polygon_id,area,perimeter,metadata\n')
-                for idx, poly in enumerate(self.polygons, start=1):
-                    area_real = poly.area_px * (self.scale_factor ** 2)
-                    perim_real = poly.perimeter_px * self.scale_factor
-                    meta_str = json.dumps(poly.metadata)
-                    f.write(f'{idx},{area_real},{perim_real},"{meta_str}"\n')
-            messagebox.showinfo("Export", "Measurements exported successfully.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to export CSV: {e}")
+        from . import export_mod
+        export_mod.export_csv(self)
 
     # ----- 3D Visualisation -----
     def show_3d_view(self) -> None:
-        """Generate and display a 3D extrusion of all drawn polygons."""
-        if not self.polygons:
-            messagebox.showwarning("Warning", "Draw at least one polygon first.")
-            return
-        if self.image is None:
-            return
-        width, height_img = self.image.size
-        # Normalise polygon coordinates to [0,1] for 3D plot
-        norm_polys: List[List[Tuple[float, float]]] = []
-        for poly in self.polygons:
-            pts = [(x / width, y / height_img) for (x, y) in poly.points]
-            norm_polys.append(pts)
-        height = float(self.config.get('extrusion_height', 1.0))
-        try:
-            img3d = generate_3d_image(norm_polys, height)
-            # Show in a new window
-            top = tk.Toplevel(self.root)
-            top.title("3D View")
-            photo3d = ImageTk.PhotoImage(img3d)
-            lbl = tk.Label(top, image=photo3d)
-            lbl.image = photo3d  # Keep a reference
-            lbl.pack()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to generate 3D view: {e}")
+        from . import three_d as three_d_mod
+        three_d_mod.show_3d_view(self)
 
     # ----- Panel Layout Optimisation -----
     def optimize_panels(self) -> None:
-        """Overlay an optimised panel layout inside the selected polygon."""
-        if self.selected_polygon is None:
-            messagebox.showwarning("Warning", "Select a polygon first.")
-            return
-        poly = self.polygons[self.selected_polygon]
-        # Convert panel dimensions from real units to pixels
-        panel_w_real = float(self.config.get('panel_width', 1.0))
-        panel_h_real = float(self.config.get('panel_height', 1.0))
-        if self.scale_factor == 0:
-            return
-        panel_w_px = panel_w_real / self.scale_factor
-        panel_h_px = panel_h_real / self.scale_factor
-        # Bounding box of polygon
-        xs = [p[0] for p in poly.points]
-        ys = [p[1] for p in poly.points]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        width = max_x - min_x
-        height = max_y - min_y
-        cols = int(width // panel_w_px)
-        rows = int(height // panel_h_px)
-        rects: List[List[Tuple[float, float]]] = []
-        for i in range(cols):
-            for j in range(rows):
-                rx = min_x + i * panel_w_px
-                ry = min_y + j * panel_h_px
-                r_points = [
-                    (rx, ry),
-                    (rx + panel_w_px, ry),
-                    (rx + panel_w_px, ry + panel_h_px),
-                    (rx, ry + panel_h_px)
-                ]
-                # Use the rectangle centre for a containment test (approximate)
-                cx = rx + panel_w_px / 2
-                cy = ry + panel_h_px / 2
-                if point_in_polygon((cx, cy), poly.points):
-                    rects.append(r_points)
-        # Redraw existing content then overlay panel rectangles
-        self.redraw()
-        for rect in rects:
-            coords: List[float] = []
-            for x, y in rect:
-                coords.extend([x * self.zoom_level, y * self.zoom_level])
-            self.canvas.create_polygon(coords, fill='', outline='orange', width=1, dash=(4, 2))
+        from . import panels as panels_mod
+        panels_mod.optimize_panels(self)
 
 
 def main() -> None:
