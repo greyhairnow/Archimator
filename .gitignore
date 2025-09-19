@@ -1,3 +1,2 @@
-.venv/pyvenv.cfg
-.venv/Scripts/python.exe
-.venv/Scripts/pythonw.exe
+.venv/*
+app/src/app/__pycache__/*

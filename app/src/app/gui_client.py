@@ -408,80 +408,16 @@ class MeasureAppGUI:
 
     # ----- File and Configuration Management -----
     def load_pdf(self) -> None:
-        """Prompt the user to select a PDF file and load its first page."""
-        path = filedialog.askopenfilename(title="Select PDF", filetypes=[("PDF files", "*.pdf")])
-        if not path:
-            return
-        try:
-            img = pdf_page_to_image(path)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load PDF: {e}")
-            return
-        # Resize image to fit within the window while leaving space for controls.
-        max_w = max(800, int(self.root.winfo_width() * 0.7))
-        max_h = max(600, int(self.root.winfo_height() * 0.9))
-        scale = min(max_w / img.width, max_h / img.height, 1.0)
-        if scale < 1.0:
-            new_size = (int(img.width * scale), int(img.height * scale))
-            try:
-                resample = Image.Resampling.LANCZOS
-            except AttributeError:
-                resample = Image.LANCZOS
-            img = img.resize(new_size, resample)
-        # Store the resized image (prior to rotation/zoom) and reset rotation/zoom
-        self.image = img
-        self.photo = ImageTk.PhotoImage(img)
-        self.image_rotation = 0
-        self.zoom_level = 1.0
-        # Configure the canvas scroll region and display the image
-        self.canvas.config(scrollregion=(0, 0, img.width, img.height))
-        self.canvas.delete("all")
-        self.canvas.create_image(0, 0, anchor=tk.NW, image=self.photo)
-        # Reset measurement state
-        self.polygons.clear()
-        self.current_polygon.clear()
-        self.scale_points.clear()
-        self.scale_artifact = None
-        self.scale_marker_id = None
-        self.scale_line_id = None
-        self.scale_factor = 1.0
-        self.scale_unit = "units"
-        self.scale_label.config(text=f"Scale: {self.scale_factor:.4f} {self.scale_unit}/pixel")
-        self.clear_scale_preview()
-        self.canvas.config(cursor="")
-        self.root.unbind("<Escape>")
-        self.info_label.config(text="No polygon selected.")
-        self.selected_polygon = None
-        self.draw_mode = False
-        self.scale_mode = False
-        self._straighten_backup = None
-        # Hide any zoom preview window
-        self.hide_zoom_preview()
+        file_io = _import_app_module('file_io')
+        file_io.load_pdf(self)
 
     def load_config(self) -> None:
-        """Load panel configuration from a JSON file."""
-        path = filedialog.askopenfilename(title="Select Config JSON", filetypes=[("JSON files", "*.json")])
-        if not path:
-            return
-        try:
-            with open(path, 'r', encoding='utf-8') as f:
-                cfg = json.load(f)
-            self.config.update(cfg)
-            messagebox.showinfo("Config", "Configuration loaded.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load configuration: {e}")
+        file_io = _import_app_module('file_io')
+        file_io.load_config(self)
 
     def save_config(self) -> None:
-        """Save the current configuration to a JSON file."""
-        path = filedialog.asksaveasfilename(title="Save Config", defaultextension='.json', filetypes=[("JSON files", "*.json")])
-        if not path:
-            return
-        try:
-            with open(path, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, indent=2)
-            messagebox.showinfo("Config", "Configuration saved.")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save configuration: {e}")
+        file_io = _import_app_module('file_io')
+        file_io.save_config(self)
 
     # ----- Mode Selection -----
     def set_scale_mode(self) -> None:
