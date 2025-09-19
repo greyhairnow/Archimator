@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Architectural Diagram Measurement Tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Architectural Diagram Measurement Tool</h1>
+    <p>Load a PDF diagram, draw rooms as polygons, set a scale and export measurements.</p>
+  </header>
+  <section id="controls">
+    <div class="control-group">
+      <label for="pdfInput">Load PDF:</label>
+      <input type="file" id="pdfInput" accept="application/pdf">
+    </div>
+    <div class="control-group">
+      <label for="configInput">Load Config:</label>
+      <input type="file" id="configInput" accept="application/json">
+      <button id="saveConfig">Save Config</button>
+    </div>
+    <div class="control-group">
+      <button id="setScale">Set Scale</button>
+      <span id="scaleInfo"></span>
+    </div>
+    <div class="control-group">
+      <button id="drawPolygon">Draw Polygon</button>
+      <button id="exportData">Export CSV</button>
+    </div>
+    <div class="control-group">
+      <button id="view3d">3D View</button>
+      <button id="optimizePanels">Optimize Panel Layout</button>
+    </div>
+    <div id="message" class="message"></div>
+  </section>
+  <main>
+    <div id="canvasContainer">
+      <canvas id="diagramCanvas"></canvas>
+    </div>
+    <aside id="infoPanel">
+      <h2>Selected Polygon</h2>
+      <div id="polyDetails">No polygon selected.</div>
+      <div id="metadataForm" class="hidden">
+        <h3>Metadata</h3>
+        <label>Room ID: <input type="text" id="metaId"></label>
+        <label>Room Name: <input type="text" id="metaName"></label>
+        <button id="saveMetadata">Save Metadata</button>
+      </div>
+    </aside>
+  </main>
+  <div id="modal" class="hidden">
+    <div id="modalContent"></div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
