@@ -204,7 +204,7 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Load PDF", command=self.load_pdf).pack(fill=tk.X)
         tk.Button(side_frame, text="Load Config", command=self.load_config).pack(fill=tk.X)
         tk.Button(side_frame, text="Save Config", command=self.save_config).pack(fill=tk.X)
-        tk.Button(side_frame, text="Set Scale", command=self.set_scale_mode).pack(fill=tk.X)
+        tk.Button(side_frame, text="Set Unit/Scale", command=self.set_scale_mode).pack(fill=tk.X)
         tk.Button(side_frame, text="Draw Polygon", command=self.set_draw_mode).pack(fill=tk.X)
         tk.Button(side_frame, text="Export CSV", command=self.export_csv).pack(fill=tk.X)
         tk.Button(side_frame, text="3D View", command=self.show_3d_view).pack(fill=tk.X)
@@ -212,7 +212,8 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Straighten Polygon", command=self.straighten_polygon).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Straighten", command=self.undo_straighten).pack(fill=tk.X)
         # Labels to display the current scale and selection info.
-        self.scale_label = tk.Label(side_frame, text="Scale: 1.0 units/pixel")
+        self.scale_unit = "units"
+        self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")
         self.scale_label.pack(fill=tk.X, pady=(10, 0))
         self.info_label = tk.Label(side_frame, text="No polygon selected.")
         self.info_label.pack(fill=tk.X)
@@ -247,6 +248,8 @@ class MeasureAppGUI:
             'panel_height': 1.0,
             'extrusion_height': 1.0
         }
+        # Scale preview state
+        self.scale_preview_line_id: Optional[int] = None  # Canvas ID for rubber-band preview
         # Zoom/pan/rotation state
         self.zoom_level: float = 1.0
         self.image_rotation: int = 0  # Rotation in degrees (0, 90, 180, 270)
@@ -441,7 +444,11 @@ class MeasureAppGUI:
         self.scale_marker_id = None
         self.scale_line_id = None
         self.scale_factor = 1.0
-        self.scale_label.config(text="Scale: 1.0 units/pixel")
+        self.scale_unit = "units"
+        self.scale_label.config(text=f"Scale: {self.scale_factor:.4f} {self.scale_unit}/pixel")
+        self.clear_scale_preview()
+        self.canvas.config(cursor="")
+        self.root.unbind("<Escape>")
         self.info_label.config(text="No polygon selected.")
         self.selected_polygon = None
         self.draw_mode = False
@@ -484,9 +491,8 @@ class MeasureAppGUI:
         # Enable scale mode and disable draw mode
         self.scale_mode = True
         self.draw_mode = False
-        # Clear existing scale points and artifacts
+        # Clear existing scale points and transient artifacts
         self.scale_points.clear()
-        self.scale_artifact = None
         # Remove any existing scale markers/lines from canvas
         if self.scale_marker_id is not None:
             self.canvas.delete(self.scale_marker_id)
@@ -494,14 +500,76 @@ class MeasureAppGUI:
         if self.scale_line_id is not None:
             self.canvas.delete(self.scale_line_id)
             self.scale_line_id = None
+        self.clear_scale_preview()
+        self.canvas.config(cursor="target")
+        self.root.bind("<Escape>", self.cancel_scale_mode)
         messagebox.showinfo(
-            "Set Scale",
+            "Set Unit/Scale",
             "Click two points on a known distance.\n"
-            "A large pointer will show for the first point.\n"
-            "After the second point, the scale line will remain visible."
+            "A target cursor will appear for precise placement.\n"
+            "Press Esc at any time to cancel."
         )
         # Bind motion events to show zoom preview while selecting scale
         self.canvas.bind("<Motion>", self.on_canvas_motion)
+
+    def clear_scale_preview(self) -> None:
+        """Remove the temporary rubber-band line used while selecting scale points."""
+        if self.scale_preview_line_id is not None:
+            self.canvas.delete(self.scale_preview_line_id)
+            self.scale_preview_line_id = None
+
+    def exit_scale_mode(self) -> None:
+        """Common cleanup executed when leaving scale mode."""
+        self.scale_mode = False
+        self.canvas.config(cursor="")
+        self.clear_scale_preview()
+        self.hide_zoom_preview()
+        self.root.unbind("<Escape>")
+        # Temporary scale line re-rendered via redraw; drop any stale canvas IDs.
+        self.scale_line_id = None
+        self.scale_marker_id = None
+
+    def cancel_scale_mode(self, event=None) -> None:
+        """Cancel scale selection without modifying the existing scale."""
+        if not self.scale_mode:
+            return
+        if self.scale_marker_id is not None:
+            self.canvas.delete(self.scale_marker_id)
+            self.scale_marker_id = None
+        if self.scale_line_id is not None:
+            self.canvas.delete(self.scale_line_id)
+            self.scale_line_id = None
+        self.scale_points.clear()
+        self.exit_scale_mode()
+        self.redraw()
+
+    def _prompt_scale_unit(self) -> Optional[str]:
+        """Prompt the user for the unit label; return None if cancelled."""
+        while True:
+            unit = simpledialog.askstring("Set Unit/Scale", "Enter units (e.g., m, cm, ft, in):")
+            if unit is None:
+                return None
+            unit = unit.strip()
+            if unit:
+                return unit
+            messagebox.showerror("Set Unit/Scale", "Unit is required.")
+
+    def _prompt_scale_length(self, unit: str) -> Optional[float]:
+        """Prompt for the real-world length in the supplied unit."""
+        while True:
+            prompt = f"Enter real-world length between the two points (in {unit}):"
+            real_len_str = simpledialog.askstring("Set Unit/Scale", prompt)
+            if real_len_str is None:
+                return None
+            try:
+                real_len = float(real_len_str)
+            except (TypeError, ValueError):
+                messagebox.showerror("Set Unit/Scale", "Enter a numeric value for the length.")
+                continue
+            if real_len <= 0:
+                messagebox.showerror("Set Unit/Scale", "Length must be greater than zero.")
+                continue
+            return real_len
 
     def set_draw_mode(self) -> None:
         """Enter polygon drawing mode to outline rooms."""
@@ -553,6 +621,15 @@ class MeasureAppGUI:
                 if self.scale_marker_id is not None:
                     self.canvas.delete(self.scale_marker_id)
                     self.scale_marker_id = None
+                self.clear_scale_preview()
+                dx = px2 - px1
+                dy = py2 - py1
+                pixel_dist = math.hypot(dx, dy)
+                if pixel_dist == 0:
+                    messagebox.showerror("Set Unit/Scale", "Select two distinct points to set the scale.")
+                    self.scale_points.clear()
+                    self.redraw()
+                    return
                 # Draw dashed line and end circles for scale reference
                 self.scale_line_id = self.canvas.create_line(
                     px1_canvas, py1_canvas, px2_canvas, py2_canvas,
@@ -562,27 +639,28 @@ class MeasureAppGUI:
                                         fill='purple', outline='black', width=2)
                 self.canvas.create_oval(px2_canvas - 8, py2_canvas - 8, px2_canvas + 8, py2_canvas + 8,
                                         fill='purple', outline='black', width=2)
-                # Prompt for the real‑world length between the two points
-                real_len_str = simpledialog.askstring("Set Scale", "Enter real‑world length between the two points (units):")
-                try:
-                    real_len = float(real_len_str)  # type: ignore[arg-type]
-                    dx = px2 - px1
-                    dy = py2 - py1
-                    pixel_dist = math.hypot(dx, dy)
-                    if pixel_dist == 0:
-                        raise ValueError("Zero pixel distance")
-                    self.scale_factor = real_len / pixel_dist
-                    self.scale_label.config(text=f"Scale: {self.scale_factor:.4f} units/pixel")
-                    # Store the scale artifact for persistent display
-                    self.scale_artifact = {
-                        'points': self.scale_points.copy(),
-                        'real_length': real_len,
-                        'pixel_length': pixel_dist
-                    }
-                except Exception:
-                    messagebox.showerror("Error", "Invalid length provided.")
-                # Exit scale mode
-                self.scale_mode = False
+                unit = self._prompt_scale_unit()
+                if unit is None:
+                    self.cancel_scale_mode()
+                    return
+                real_len = self._prompt_scale_length(unit)
+                if real_len is None:
+                    self.cancel_scale_mode()
+                    return
+                self.scale_factor = real_len / pixel_dist
+                self.scale_unit = unit
+                self.scale_label.config(text=f"Scale: {self.scale_factor:.4f} {self.scale_unit}/pixel")
+                # Store the scale artifact for persistent display
+                self.scale_artifact = {
+                    'points': self.scale_points.copy(),
+                    'real_length': real_len,
+                    'pixel_length': pixel_dist,
+                    'unit': self.scale_unit,
+                    'scale_factor': self.scale_factor
+                }
+                self.scale_points.clear()
+                self.exit_scale_mode()
+                self.update_info_label()
                 # Redraw so the persistent scale line is integrated into the canvas
                 self.redraw()
             return
@@ -822,8 +900,24 @@ class MeasureAppGUI:
         # Show preview only during scale or draw mode
         if not (self.scale_mode or self.draw_mode):
             self.hide_zoom_preview()
+            self.clear_scale_preview()
             return
         self.show_zoom_preview(event.x, event.y)
+        if self.scale_mode and len(self.scale_points) == 1:
+            px, py = self.scale_points[0]
+            x1 = px * self.zoom_level
+            y1 = py * self.zoom_level
+            x2 = self.canvas.canvasx(event.x)
+            y2 = self.canvas.canvasy(event.y)
+            if self.scale_preview_line_id is None:
+                self.scale_preview_line_id = self.canvas.create_line(
+                    x1, y1, x2, y2,
+                    fill='purple', width=2, dash=(2, 4)
+                )
+            else:
+                self.canvas.coords(self.scale_preview_line_id, x1, y1, x2, y2)
+        else:
+            self.clear_scale_preview()
 
     # ----- Drawing and Display -----
     def redraw(self) -> None:
@@ -898,11 +992,12 @@ class MeasureAppGUI:
         area_real = poly.area_px * (self.scale_factor ** 2)
         perim_real = poly.perimeter_px * self.scale_factor
         meta = poly.metadata
+        unit_label = self.scale_unit or "units"
         info = (
             f"ID: {meta.get('id', '')}\n"
             f"Name: {meta.get('name', '')}\n"
-            f"Area: {area_real:.2f} sq units\n"
-            f"Perimeter: {perim_real:.2f} units"
+            f"Area: {area_real:.2f} sq {unit_label}\n"
+            f"Perimeter: {perim_real:.2f} {unit_label}"
         )
         self.info_label.config(text=info)
 
