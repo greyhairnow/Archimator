@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from typing import Optional, TYPE_CHECKING
+import datetime
 
 try:
     import tkinter as tk
@@ -40,6 +41,15 @@ def set_scale_mode(app: "MeasureAppGUI") -> None:
         if messagebox:
             messagebox.showwarning("Warning", "Load a PDF first.")
         return
+    # Pre-check: if a scale already exists, ask user if they want to replace it
+    if app.scale_artifact is not None and messagebox is not None:
+        current_txt = f"{app.scale_factor:.4f} {getattr(app, 'scale_unit', 'units')}/pixel"
+        if not messagebox.askyesno(
+            "Replace Scale?",
+            "A scale is already defined for this diagram (" + current_txt + ").\n"
+            "Do you want to replace it with a new scale now?"
+        ):
+            return
     app.scale_mode = True
     app.draw_mode = False
     app.scale_points.clear()
@@ -249,7 +259,19 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
             cancel_scale_mode(app)
             return True
         unit, real_len = unit_len
-        app.scale_factor = real_len / pixel_dist
+        new_scale_factor = real_len / pixel_dist
+        # If a scale already exists, confirm replacement to enforce a single definition per diagram
+        if app.scale_artifact is not None and messagebox is not None:
+            current_txt = f"{app.scale_factor:.4f} {getattr(app, 'scale_unit', 'units')}/pixel"
+            proposed_txt = f"{new_scale_factor:.4f} {unit}/pixel"
+            if not messagebox.askyesno(
+                "Replace Scale?",
+                f"A scale is already defined (" + current_txt + ").\n"
+                f"Replace it with the new scale (" + proposed_txt + ")?"
+            ):
+                cancel_scale_mode(app)
+                return True
+        app.scale_factor = new_scale_factor
         app.scale_unit = unit
         app.scale_label.config(text=f"Scale: {app.scale_factor:.4f} {app.scale_unit}/pixel")
         app.scale_artifact = {
@@ -257,7 +279,13 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
             'real_length': real_len,
             'pixel_length': pixel_dist,
             'unit': app.scale_unit,
-            'scale_factor': app.scale_factor
+            'scale_factor': app.scale_factor,
+            # Additional metadata to help with exports and traceability
+            'source_path': getattr(app, 'current_document_path', None),
+            'created_at': datetime.datetime.now().isoformat(timespec='seconds'),
+            'image_size': (app.image.width if app.image else None, app.image.height if app.image else None),
+            'image_rotation': getattr(app, 'image_rotation', 0),
+            'zoom_level_at_set': getattr(app, 'zoom_level', 1.0)
         }
         app.scale_points.clear()
         exit_scale_mode(app)

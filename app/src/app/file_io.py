@@ -58,6 +58,7 @@ def load_pdf(app: "MeasureAppGUI") -> None:
 
     from PIL import ImageTk
 
+    app.current_document_path = path
     app.image = img
     app.photo = ImageTk.PhotoImage(img)
     app.display_image = img
@@ -115,4 +116,3 @@ def save_config(app: "MeasureAppGUI") -> None:
     except Exception as e:
         if messagebox:
             messagebox.showerror("Error", f"Failed to save configuration: {e}")
-
