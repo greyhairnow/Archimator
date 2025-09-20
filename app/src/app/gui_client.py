@@ -35,11 +35,9 @@ headless environments (such as this sandbox) where a GUI cannot be created.
 Run it locally on a system with a graphical desktop. 
 """
 
-import importlib
 import importlib.util
 import json
 import math
-import os
 import sys
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
@@ -69,7 +67,6 @@ if missing_packages:
     print(message, file=sys.stderr)
     raise SystemExit(1)
 
-import pymupdf as fitz  # Alias to retain existing usage
 from PIL import Image
 
 try:
@@ -80,10 +77,6 @@ except ImportError:
     # When Tkinter is unavailable (e.g. headless environment), set tk to None.
     tk = None  # type: ignore
 
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 try:
     from . import facade
 except Exception:
@@ -91,57 +84,9 @@ except Exception:
 
 
 
-def pdf_page_to_image(pdf_path: str, page_number: int = 0) -> Image.Image:
-    """Load the specified page of a PDF and convert it to a PIL Image."""
-    with open(pdf_path, 'rb') as f:
-        doc = fitz.open(stream=f.read(), filetype='pdf')
-    if page_number < 0 or page_number >= len(doc):
-        raise ValueError(f"Invalid page number {page_number} for PDF with {len(doc)} pages")
-    page = doc.load_page(page_number)
-    # Render at ~144 DPI for good detail (zoom factor 2).
-    zoom = 2
-    mat = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix=mat)
-    mode = 'RGB' if pix.alpha == 0 else 'RGBA'
-    img = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-    return img
-
-
-def generate_3d_image(polygons: List[List[Tuple[float, float]]], height: float = 1.0) -> Image.Image:
-    """Generate a static 3D extrusion plot and return it as a PIL Image."""
-    fig = plt.figure(figsize=(6, 6))
-    ax = fig.add_subplot(111, projection='3d')
-    for idx, pts in enumerate(polygons):
-        if len(pts) < 3:
-            continue
-        xs = [p[0] for p in pts] + [pts[0][0]]
-        ys = [p[1] for p in pts] + [pts[0][1]]
-        zs_bottom = [0] * len(xs)
-        zs_top = [height] * len(xs)
-        color = f'C{idx % 10}'
-        ax.plot(xs, ys, zs_bottom, color=color, alpha=0.6)
-        ax.plot(xs, ys, zs_top, color=color, alpha=0.6)
-        for i in range(len(pts)):
-            x0, y0 = pts[i]
-            ax.plot([x0, x0], [y0, y0], [0, height], color=color, alpha=0.6)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Height')
-    # Normalise axes to [0,1] for consistency; caller is expected to normalise
-    # polygon coordinates relative to the page before calling this function.
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_zlim(0, height)
-    ax.view_init(elev=20, azim=30)
-    ax.grid(False)
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.set_zticks([])
-    buf = os.path.join('/tmp', 'extrusion.png')
-    fig.savefig(buf, format='png', bbox_inches='tight')
-    plt.close(fig)
-    img = Image.open(buf)
-    return img
+## Note: pdf_page_to_image and generate_3d_image have been moved to modular components:
+## - PDF loading is handled by file_io._pdf_page_to_image (via facade.file_load_pdf)
+## - 3D generation lives in three_d.generate_3d_image (via facade.three_d_show)
 
 
 if __package__:
@@ -799,5 +744,6 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+
 
 
