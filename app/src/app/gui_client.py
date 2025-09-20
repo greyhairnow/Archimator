@@ -67,7 +67,7 @@ if missing_packages:
     print(message, file=sys.stderr)
     raise SystemExit(1)
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 try:
     import tkinter as tk
@@ -574,43 +574,83 @@ class MeasureAppGUI:
         self.redraw()
 
     # ----- Zoom Preview -----
+
     def show_zoom_preview(self, x: float, y: float) -> None:
         """Display a small window showing a magnified area around the pointer."""
         if self.image is None:
             return
-        # Use the actual displayed image (rotation + zoom applied) for precise preview
         src = self.display_image if self.display_image is not None else self.image
         if src is None:
             return
-        # Convert pointer coords to displayed image space (accounting for pan via canvasx/canvasy)
-        img_x = int(self.canvas.canvasx(x))
-        img_y = int(self.canvas.canvasy(y))
-        # Clamp the centre to valid image bounds to avoid invalid crops at edges
+        canvas_x = float(self.canvas.canvasx(x))
+        canvas_y = float(self.canvas.canvasy(y))
         w, h = src.size
         if w <= 0 or h <= 0:
             return
-        img_x = max(0, min(img_x, w - 1))
-        img_y = max(0, min(img_y, h - 1))
-        # Define region around pointer (square region from original image)
-        region_size = max(20, min(80, self.zoom_preview_size // 2 * 2))  # keep reasonable size
+        canvas_x = max(0.0, min(canvas_x, w - 1))
+        canvas_y = max(0.0, min(canvas_y, h - 1))
+
+        preview_zoom = max(0.5, float(getattr(self, "zoom_preview_zoom", 1.0)))
+        region_size = int(round((self.zoom_preview_size / preview_zoom) * max(self.zoom_level, 0.01)))
+        region_size = max(6, region_size)
+        region_size = min(region_size, min(w, h))
+        region_size = max(2, region_size - (region_size % 2))
         half = region_size // 2
-        left = max(img_x - half, 0)
-        upper = max(img_y - half, 0)
-        right = min(img_x + half, w)
-        lower = min(img_y + half, h)
-        # Ensure valid crop box even at the borders
-        if right <= left:
-            right = min(left + 1, w)
-            left = max(0, right - 1)
-        if lower <= upper:
-            lower = min(upper + 1, h)
-            upper = max(0, lower - 1)
+
+        left = int(round(canvas_x)) - half
+        upper = int(round(canvas_y)) - half
+        left = max(0, min(left, w - region_size))
+        upper = max(0, min(upper, h - region_size))
+        right = left + region_size
+        lower = upper + region_size
+
+        pointer_rel_x = canvas_x - left
+        pointer_rel_y = canvas_y - upper
+        pointer_rel_x = max(0.0, min(pointer_rel_x, region_size - 1))
+        pointer_rel_y = max(0.0, min(pointer_rel_y, region_size - 1))
+
         crop = src.crop((left, upper, right, lower))
-        # Resize to preview window size using nearest neighbour for crispness
+        if crop.width == 0 or crop.height == 0:
+            return
+
+        scale = self.zoom_preview_size / region_size
+        px = pointer_rel_x * scale
+        py = pointer_rel_y * scale
+        px = max(0.0, min(px, self.zoom_preview_size - 1))
+        py = max(0.0, min(py, self.zoom_preview_size - 1))
+
         zoomed = crop.resize(
             (self.zoom_preview_size, self.zoom_preview_size),
             Image.NEAREST
         )
+        draw = ImageDraw.Draw(zoomed)
+        px_i = int(round(px))
+        py_i = int(round(py))
+        size_max = self.zoom_preview_size - 1
+        arm = max(6, self.zoom_preview_size // 4)
+        draw.line(
+            [(px_i, max(0, py_i - arm)), (px_i, min(size_max, py_i + arm))],
+            fill='red',
+            width=2,
+        )
+        draw.line(
+            [(max(0, px_i - arm), py_i), (min(size_max, px_i + arm), py_i)],
+            fill='red',
+            width=2,
+        )
+        dot_radius = 3
+        draw.ellipse(
+            (
+                px_i - dot_radius,
+                py_i - dot_radius,
+                px_i + dot_radius,
+                py_i + dot_radius,
+            ),
+            outline='white',
+            fill='red',
+            width=1,
+        )
+
         preview_img = ImageTk.PhotoImage(zoomed)
         if self.zoom_preview_win is None or not self.zoom_preview_win.winfo_exists():
             self.zoom_preview_win = tk.Toplevel(self.root)

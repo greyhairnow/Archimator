@@ -24,14 +24,14 @@ except Exception:
 
 
 # Visual parameters for interactive drawing
-DRAW_MARKER_RADIUS: int = 6
+DRAW_MARKER_RADIUS: int = 8
 FIRST_MARKER_EXTRA: int = 2
 DRAW_MARKER_FILL: str = 'red'
 DRAW_MARKER_OUTLINE: str = 'white'
-DRAW_MARKER_OUTLINE_WIDTH: int = 2
+DRAW_MARKER_OUTLINE_WIDTH: int = 4
 DRAW_PREVIEW_COLOR: str = 'red'
 DRAW_PREVIEW_DASH: tuple[int, int] = (4, 4)
-DRAW_PREVIEW_WIDTH: int = 2
+DRAW_PREVIEW_WIDTH: int = 4
 CLOSE_THRESHOLD_PX: int = 10
 
 
