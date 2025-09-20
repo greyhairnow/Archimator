@@ -147,6 +147,23 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Optimize Panels", command=self.optimize_panels).pack(fill=tk.X)
         tk.Button(side_frame, text="Straighten Polygon", command=lambda: facade.straighten_do(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Straighten", command=lambda: facade.straighten_undo(self)).pack(fill=tk.X)
+        tk.Button(side_frame, text="Undo Vertex Move", command=lambda: facade.drag_undo(self)).pack(fill=tk.X)
+        # Snap tolerance control for vertex drag
+        tol_frame = tk.Frame(side_frame)
+        tol_frame.pack(fill=tk.X)
+        tk.Label(tol_frame, text="Snap tol (°):").pack(side=tk.LEFT)
+        self.snap_tolerance_deg: float = 3.0
+        self._snap_tol_var = tk.StringVar(value=str(int(self.snap_tolerance_deg)))
+        tol_entry = tk.Entry(tol_frame, width=4, textvariable=self._snap_tol_var)
+        tol_entry.pack(side=tk.LEFT)
+        def _apply_tol(*_):
+            try:
+                val = float(self._snap_tol_var.get())
+                self.snap_tolerance_deg = max(0.0, min(val, 30.0))
+            except Exception:
+                pass
+        tol_entry.bind('<Return>', _apply_tol)
+        tol_entry.bind('<FocusOut>', _apply_tol)
         # Labels to display the current scale and selection info.
         self.scale_unit = "units"
         self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")

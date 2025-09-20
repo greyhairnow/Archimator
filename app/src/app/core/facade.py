@@ -116,12 +116,14 @@ try:
         on_drag_start as drag_start,
         on_drag_move as drag_move,
         on_drag_end as drag_end,
+        undo_last_vertex_move as drag_undo,
     )
 except Exception:
     from features.editing.drag import (
         on_drag_start as drag_start,
         on_drag_move as drag_move,
         on_drag_end as drag_end,
+        undo_last_vertex_move as drag_undo,
     )
 
 # Straighten
