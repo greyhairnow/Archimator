@@ -1,10 +1,13 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .gui_client import MeasureAppGUI
+    try:
+        from ...gui_client import MeasureAppGUI  # type: ignore
+    except Exception:
+        from gui_client import MeasureAppGUI  # type: ignore
 
 
 def on_drag_start(app: "MeasureAppGUI", event) -> None:

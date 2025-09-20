@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from typing import TYPE_CHECKING, List, Tuple
@@ -84,4 +84,5 @@ def show_3d_view(app: "MeasureAppGUI") -> None:
     except Exception as e:
         from tkinter import messagebox
         messagebox.showerror("Error", f"Failed to generate 3D view: {e}")
+
 

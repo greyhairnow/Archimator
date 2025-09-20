@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
@@ -36,4 +36,5 @@ def export_csv(app: "MeasureAppGUI") -> None:
     except Exception as e:
         if messagebox:
             messagebox.showerror("Error", f"Failed to export CSV: {e}")
+
 

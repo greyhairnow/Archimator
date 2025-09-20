@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING, List, Tuple
@@ -78,4 +78,5 @@ def undo_straighten(app: "MeasureAppGUI") -> None:
     poly.compute_metrics()
     app._straighten_backup = None
     app.redraw()
+
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -9,12 +9,16 @@ except Exception:  # pragma: no cover
     simpledialog = None  # type: ignore
 
 if TYPE_CHECKING:
-    from .gui_client import MeasureAppGUI
+    # When packaged: app.src.app.features.editing â†’ up two levels to app, then gui_client
+    try:
+        from ...gui_client import MeasureAppGUI  # type: ignore
+    except Exception:  # script-run fallback
+        from gui_client import MeasureAppGUI  # type: ignore
 
 try:
-    from .model import PolygonData
+    from ...core.model import PolygonData  # packaged import
 except Exception:
-    from model import PolygonData
+    from core.model import PolygonData  # script-run fallback
 
 
 def set_draw_mode(app: "MeasureAppGUI") -> None:
@@ -64,3 +68,4 @@ def finish_polygon(app: "MeasureAppGUI") -> None:
     app.selected_polygon = len(app.polygons) - 1
     app.update_info_label()
     app.redraw()
+

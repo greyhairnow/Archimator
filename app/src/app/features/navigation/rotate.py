@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING, Tuple
@@ -72,4 +72,5 @@ def apply_rotation(app: "MeasureAppGUI") -> None:
             app.scale_artifact['points'] = pts
 
     app.redraw()
+
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING, List, Tuple
 
@@ -8,9 +8,9 @@ except Exception:  # pragma: no cover
     messagebox = None  # type: ignore
 
 try:
-    from .model import point_in_polygon
+    from ...core.model import point_in_polygon
 except Exception:
-    from model import point_in_polygon
+    from core.model import point_in_polygon
 
 if TYPE_CHECKING:
     from .gui_client import MeasureAppGUI
@@ -57,3 +57,4 @@ def optimize_panels(app: "MeasureAppGUI") -> None:
         for x, y in rect:
             coords.extend([x * app.zoom_level, y * app.zoom_level])
         app.canvas.create_polygon(coords, fill='', outline='orange', width=1, dash=(4, 2))
+

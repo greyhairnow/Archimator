@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
@@ -36,4 +36,5 @@ def set_zoom(app: "MeasureAppGUI", zoom: float) -> None:
     app.display_image = img
     app.canvas.config(scrollregion=(0, 0, img.width, img.height))
     app.redraw()
+
 

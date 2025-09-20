@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
@@ -17,4 +17,5 @@ def on_pan_start(app: "MeasureAppGUI", event) -> None:
 
 def on_pan_move(app: "MeasureAppGUI", event) -> None:
     app.canvas.scan_dragto(event.x, event.y, gain=1)
+
 

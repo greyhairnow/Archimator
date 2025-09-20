@@ -78,9 +78,9 @@ except ImportError:
     tk = None  # type: ignore
 
 try:
-    from . import facade
+    from .core import facade
 except Exception:
-    import facade  # type: ignore
+    import core.facade as facade  # type: ignore
 
 
 
@@ -90,14 +90,14 @@ except Exception:
 
 
 if __package__:
-    from .model import (
+    from .core.model import (
         PolygonData,
         shoelace_area,
         polygon_perimeter,
         point_in_polygon,
     )
 else:
-    from model import (
+    from core.model import (
         PolygonData,
         shoelace_area,
         polygon_perimeter,

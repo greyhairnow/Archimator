@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
@@ -61,4 +61,5 @@ class PolygonData:
         """Recompute area and perimeter in pixel units."""
         self.area_px = shoelace_area(self.points)
         self.perimeter_px = polygon_perimeter(self.points)
+
 

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import math
 from typing import Optional, TYPE_CHECKING
@@ -13,7 +13,10 @@ except Exception:  # pragma: no cover
     messagebox = None  # type: ignore
 
 if TYPE_CHECKING:
-    from .gui_client import MeasureAppGUI
+    try:
+        from ...gui_client import MeasureAppGUI  # type: ignore
+    except Exception:
+        from gui_client import MeasureAppGUI  # type: ignore
 
 # ---------- Visual Style Configuration ----------
 # Rubber-band (preview) line drawn between first point and mouse pointer
@@ -293,3 +296,4 @@ def scale_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
         app.redraw()
         return True
     return False
+

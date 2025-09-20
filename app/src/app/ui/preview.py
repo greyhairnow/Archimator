@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
@@ -64,3 +64,4 @@ def hide_zoom_preview(app: "MeasureAppGUI") -> None:
         app.zoom_preview_win.destroy()
         app.zoom_preview_win = None
         app.zoom_preview_label = None
+
