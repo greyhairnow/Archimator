@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING, Optional, Tuple, List
@@ -65,6 +65,8 @@ def on_drag_start(app: "MeasureAppGUI", event) -> None:
 
 def on_drag_move(app: "MeasureAppGUI", event) -> None:
     if not app.dragging or app.drag_point_index is None:
+        return
+    if app.selected_polygon is None:
         return
     x = app.canvas.canvasx(event.x)
     y = app.canvas.canvasy(event.y)
@@ -165,7 +167,7 @@ def on_drag_move(app: "MeasureAppGUI", event) -> None:
             arts["spring"] = spring
         # Angle indicator text near current point
         color = 'lime' if snapped or abs(deg - 180.0) <= TOL_DEG or abs(deg) <= TOL_DEG else 'yellow'
-        txt = f"{deg:.1f}°"
+        txt = f"{deg:.1f} deg"
         angle_id = app.canvas.create_text(cx + 12, cy - 12, text=txt, fill=color, font=("TkDefaultFont", 10, "bold"))
         arts["angle_text"] = angle_id
         # Snap tooltip cue
@@ -250,4 +252,5 @@ def undo_last_vertex_move(app: "MeasureAppGUI") -> None:
     app.selected_polygon = poly_idx
     app.redraw()
     app.update_info_label()
+
 

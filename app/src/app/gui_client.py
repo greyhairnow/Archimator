@@ -246,6 +246,7 @@ class MeasureAppGUI:
         self.drag_point_index: Optional[int] = None
         self.drag_start_x: float = 0.0
         self.drag_start_y: float = 0.0
+        self.panel_tiles_overlay: Optional[dict] = None
         self.snap_tolerance_deg: float = 3.0
 
     # ----- Pan/Zoom/Rotate Button Setup -----
@@ -694,6 +695,7 @@ class MeasureAppGUI:
             self.canvas.create_oval(px_canvas - 12, py_canvas - 12, px_canvas + 12, py_canvas + 12,
                                     fill='blue', outline='black', width=3)
         # Draw completed polygons
+        overlay_state = getattr(self, "panel_tiles_overlay", None)
 
         for idx, poly in enumerate(self.polygons):
             coords = []
@@ -726,6 +728,15 @@ class MeasureAppGUI:
                 font = ("TkDefaultFont", font_size, "bold")
                 self.canvas.create_text(cx_canvas + 1, cy_canvas + 1, text=label_text, fill='white', font=font, justify=tk.CENTER)
                 self.canvas.create_text(cx_canvas, cy_canvas, text=label_text, fill='black', font=font, justify=tk.CENTER)
+            if overlay_state and overlay_state.get('polygon_index') == idx:
+                for tile in overlay_state.get('tiles', []):
+                    tile_coords: List[float] = []
+                    for tx, ty in tile.get('points', []):
+                        tile_coords.extend([tx * self.zoom_level, ty * self.zoom_level])
+                    if tile.get('type') == 'full':
+                        self.canvas.create_polygon(tile_coords, fill='', outline='green', width=1.5)
+                    elif tile.get('type') == 'partial':
+                        self.canvas.create_polygon(tile_coords, fill='', outline='orange', width=1.5, dash=(4, 2))
         # Draw current polygon (lines connecting points) while drawing
         if self.draw_mode and len(self.current_polygon) > 0:
             coords = []
@@ -789,6 +800,12 @@ class MeasureAppGUI:
             f"Area: {area_real:.2f} sq {unit_label}\n"
             f"Perimeter: {perim_real:.2f} {unit_label}"
         )
+        overlay = getattr(self, 'panel_tiles_overlay', None)
+        if overlay and overlay.get('polygon_index') == self.selected_polygon:
+            info += f"\nTiles: {overlay.get('full_count', 0)} full, {overlay.get('partial_count', 0)} partial"
+            waste_pct = overlay.get('waste_pct')
+            if waste_pct is not None:
+                info += f"\nTile waste: {waste_pct:.1f}%"
         self.info_label.config(text=info)
 
     # ----- Exporting Data -----
