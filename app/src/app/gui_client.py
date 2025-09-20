@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 GUI client for the architectural diagram measurement tool.
 
@@ -13,8 +13,8 @@ installation on Windows, macOS or Linux with the Tk libraries installed).
 
 Features:
   * Load a PDF and display the first page on a canvas.
-  * Zoom in/out and pan the diagram via buttons or rightâ€‘click dragging.
-  * Rotate the diagram in 90Â° increments.
+  * Zoom in/out and pan the diagram via buttons or right‑click dragging.
+  * Rotate the diagram in 90° increments.
   * Draw room outlines as polygons directly on the diagram.
   * Set a reference scale by drawing a line of known length; scale lines
     remain visible after confirmation.
@@ -25,9 +25,9 @@ Features:
   * Generate a simple 3D extrusion of all rooms.
   * Optimise panel layout within a selected room using a simple tiling
     algorithm.
-  * Straighten polygons by converting nearâ€‘right angles to perfectly straight
+  * Straighten polygons by converting near‑right angles to perfectly straight
     segments, and undo the operation if necessary.
-  * Drag individual polygon vertices (nonâ€‘right angles) to fineâ€‘tune shapes.
+  * Drag individual polygon vertices (non‑right angles) to fine‑tune shapes.
   * Zoom preview window to help accurately place scale and polygon points.
 
 Note: This script requires Tkinter to be installed.  It cannot run in
@@ -82,12 +82,9 @@ try:
 except Exception:
     import core.facade as facade  # type: ignore
 
-
-
 ## Note: pdf_page_to_image and generate_3d_image have been moved to modular components:
 ## - PDF loading is handled by file_io._pdf_page_to_image (via facade.file_load_pdf)
 ## - 3D generation lives in three_d.generate_3d_image (via facade.three_d_show)
-
 
 if __package__:
     from .core.model import (
@@ -103,7 +100,6 @@ else:
         polygon_perimeter,
         point_in_polygon,
     )
-
 
 class MeasureAppGUI:
     """Main class encapsulating the Tkinter application."""
@@ -145,26 +141,11 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Export CSV", command=self.export_csv).pack(fill=tk.X)
         tk.Button(side_frame, text="3D View", command=self.show_3d_view).pack(fill=tk.X)
         tk.Button(side_frame, text="Optimize Panels", command=self.optimize_panels).pack(fill=tk.X)
-        tk.Button(side_frame, text="Straighten Polygon", command=lambda: facade.straighten_do(self)).pack(fill=tk.X)
+        self.straighten_btn = tk.Button(side_frame, text="Straighten Polygon", command=lambda: facade.straighten_do(self))
+        self.straighten_btn.pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Straighten", command=lambda: facade.straighten_undo(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Vertex Move", command=lambda: facade.drag_undo(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Edit Metadata", command=lambda: facade.metadata_edit(self)).pack(fill=tk.X)
-        # Snap tolerance control for vertex drag
-        tol_frame = tk.Frame(side_frame)
-        tol_frame.pack(fill=tk.X)
-        tk.Label(tol_frame, text="Snap tol (°):").pack(side=tk.LEFT)
-        self.snap_tolerance_deg: float = 3.0
-        self._snap_tol_var = tk.StringVar(value=str(int(self.snap_tolerance_deg)))
-        tol_entry = tk.Entry(tol_frame, width=4, textvariable=self._snap_tol_var)
-        tol_entry.pack(side=tk.LEFT)
-        def _apply_tol(*_):
-            try:
-                val = float(self._snap_tol_var.get())
-                self.snap_tolerance_deg = max(0.0, min(val, 30.0))
-            except Exception:
-                pass
-        tol_entry.bind('<Return>', _apply_tol)
-        tol_entry.bind('<FocusOut>', _apply_tol)
         # Labels to display the current scale and selection info.
         self.scale_unit = "units"
         self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")
@@ -174,6 +155,8 @@ class MeasureAppGUI:
         # Status bar (messages like snap notifications)
         self.status_label = tk.Label(side_frame, text="", fg='gray')
         self.status_label.pack(fill=tk.X)
+        # Initialize button states
+        self.update_buttons_state()
         # Bind mouse events for drawing, panning and dragging.
         # Left mouse button handles drawing polygons and selecting regions.
         self.canvas.bind("<Button-1>", self.on_canvas_click)
@@ -187,6 +170,8 @@ class MeasureAppGUI:
         self.canvas.bind("<ButtonPress-1>", lambda e: facade.drag_start(self, e), add="+")
         self.canvas.bind("<B1-Motion>", lambda e: facade.drag_move(self, e))
         self.canvas.bind("<ButtonRelease-1>", lambda e: facade.drag_end(self, e))
+        # Confirm/cancel for straighten preview
+
         # Data structures and state variables.
         self.image: Optional[Image.Image] = None  # Original PDF page (resized to fit)
         self.photo: Optional[ImageTk.PhotoImage] = None  # PhotoImage for Tkinter display
@@ -214,7 +199,7 @@ class MeasureAppGUI:
         # Zoom/pan/rotation state
         self.zoom_level: float = 1.0
         self.image_rotation: int = 0  # Rotation in degrees (0, 90, 180, 270)
-        # Straightening backup for undo
+        # Straightening state
         self._straighten_backup: Optional[List[Tuple[float, float]]] = None
         # Zoom preview window and configuration
         self.zoom_preview_win: Optional[tk.Toplevel] = None
@@ -226,6 +211,7 @@ class MeasureAppGUI:
         self.drag_point_index: Optional[int] = None
         self.drag_start_x: float = 0.0
         self.drag_start_y: float = 0.0
+        self.snap_tolerance_deg: float = 3.0
 
     # ----- Pan/Zoom/Rotate Button Setup -----
     def add_pan_zoom_buttons(self, frame: tk.Frame) -> None:
@@ -247,7 +233,7 @@ class MeasureAppGUI:
 
     # ----- Rotation Controls -----
     def rotate_left(self) -> None:
-        """Rotate the image 90Â° counterâ€‘clockwise."""
+        """Rotate the image 90° counter‑clockwise."""
         if self.image is None:
             return
         # Update rotation state and reapply rotation
@@ -255,7 +241,7 @@ class MeasureAppGUI:
         self.apply_rotation()
 
     def rotate_right(self) -> None:
-        """Rotate the image 90Â° clockwise."""
+        """Rotate the image 90° clockwise."""
         if self.image is None:
             return
         self.image_rotation = (self.image_rotation + 90) % 360
@@ -360,9 +346,9 @@ class MeasureAppGUI:
         self.canvas.xview_scroll(int(dx), 'units')
         self.canvas.yview_scroll(int(dy), 'units')
 
-    # ----- Panning via Rightâ€‘click Dragging -----
+    # ----- Panning via Right‑click Dragging -----
     def on_pan_start(self, event) -> None:
-        """Record the starting point for a panning operation (rightâ€‘click)."""
+        """Record the starting point for a panning operation (right‑click)."""
         self.canvas.scan_mark(event.x, event.y)
 
     def on_pan_move(self, event) -> None:
@@ -428,6 +414,8 @@ class MeasureAppGUI:
         """Handle mouse clicks on the canvas for scale definition, drawing, and selection."""
         if self.image is None:
             return
+        # If straighten preview is active, any left click applies it
+
         # Convert screen coordinates to canvas coordinates (taking panning into account)
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
@@ -442,7 +430,7 @@ class MeasureAppGUI:
                 return
         # Not in draw or scale mode: selection of an existing polygon
         self.selected_polygon = None
-        # Convert click to image coordinates for pointâ€‘inâ€‘polygon test
+        # Convert click to image coordinates for point‑in‑polygon test
         point = (x / self.zoom_level, y / self.zoom_level)
         for idx, poly in enumerate(self.polygons):
             if point_in_polygon(point, poly.points):
@@ -459,7 +447,7 @@ class MeasureAppGUI:
 
     # ----- Dragging Polygon Vertices -----
     def on_drag_start(self, event) -> None:
-        """Initiate dragging of a polygon vertex (nonâ€‘right angles only)."""
+        """Initiate dragging of a polygon vertex (non‑right angles only)."""
         if self.image is None or self.selected_polygon is None:
             return
         # Do not start dragging while in scale or draw mode
@@ -467,7 +455,7 @@ class MeasureAppGUI:
             return
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
-        # Check if click is on a vertex of the selected polygon and if that vertex is a nonâ€‘right angle
+        # Check if click is on a vertex of the selected polygon and if that vertex is a non‑right angle
         poly = self.polygons[self.selected_polygon]
         pts = poly.points
         n = len(pts)
@@ -477,7 +465,7 @@ class MeasureAppGUI:
             canvas_y = py * self.zoom_level
             # Hit test within a small radius (8 pixels)
             if abs(x - canvas_x) <= 8 and abs(y - canvas_y) <= 8:
-                # Compute angle at this vertex; if it's not near 90Â°, allow dragging
+                # Compute angle at this vertex; if it's not near 90°, allow dragging
                 x_prev, y_prev = pts[i - 1]
                 x_next, y_next = pts[(i + 1) % n]
                 v1 = (px - x_prev, py - y_prev)
@@ -518,81 +506,6 @@ class MeasureAppGUI:
             self.canvas.config(cursor="")
             self.redraw()
             self.update_info_label()
-
-    # ----- Straightening Polygons -----
-    def straighten_polygon(self) -> None:
-        """Straighten the selected polygon by converting segments between nearâ€‘right angles to straight lines."""
-        if self.selected_polygon is None:
-            messagebox.showwarning("Warning", "Select a polygon first.")
-            return
-        poly = self.polygons[self.selected_polygon]
-        if len(poly.points) < 3:
-            messagebox.showwarning("Warning", "Polygon must have at least 3 points.")
-            return
-        # Backup original points for undo
-        self._straighten_backup = poly.points.copy()
-        pts = poly.points
-        n = len(pts)
-        # Identify indices of vertices with nearâ€‘right angles (within Â±8Â° of 90Â°)
-        green_indices = []
-        for i in range(n):
-            x, y = pts[i]
-            x_prev, y_prev = pts[i - 1]
-            x_next, y_next = pts[(i + 1) % n]
-            v1 = (x - x_prev, y - y_prev)
-            v2 = (x_next - x, y_next - y)
-            dot = v1[0] * v2[0] + v1[1] * v2[1]
-            det = v1[0] * v2[1] - v1[1] * v2[0]
-            ang = math.atan2(det, dot)
-            deg = abs(math.degrees(ang))
-            if abs(deg - 90) < 8:
-                green_indices.append(i)
-        # Need at least two rightâ€‘angle vertices to straighten segments between them
-        if len(green_indices) < 2:
-            messagebox.showinfo("Straighten", "No sufficient green points to straighten.")
-            return
-        new_points: List[Tuple[float, float]] = []
-        used = set()
-        for idx in range(len(green_indices)):
-            i1 = green_indices[idx]
-            i2 = green_indices[(idx + 1) % len(green_indices)]
-            x1, y1 = pts[i1]
-            # Always keep the first green point
-            new_points.append((x1, y1))
-            used.add(i1)
-            # Collect indices of intermediate points between i1 and i2 (wrapping around)
-            intermediates = []
-            j = (i1 + 1) % n
-            while j != i2:
-                intermediates.append(j)
-                j = (j + 1) % n
-            if intermediates:
-                x2, y2 = pts[i2]
-                count = len(intermediates) + 1
-                # Linearly interpolate points along the straight segment
-                for k, idx_mid in enumerate(intermediates, start=1):
-                    t = k / count
-                    xm = x1 + t * (x2 - x1)
-                    ym = y1 + t * (y2 - y1)
-                    new_points.append((xm, ym))
-                    used.add(idx_mid)
-        # Ensure polygon is closed
-        if len(new_points) > 2:
-            new_points[-1] = new_points[0]
-        poly.points = new_points
-        poly.compute_metrics()
-        self.redraw()
-
-    def undo_straighten(self) -> None:
-        """Undo the last straightening operation on the selected polygon."""
-        if self.selected_polygon is None or self._straighten_backup is None:
-            messagebox.showwarning("Warning", "No straighten operation to undo.")
-            return
-        poly = self.polygons[self.selected_polygon]
-        poly.points = self._straighten_backup
-        poly.compute_metrics()
-        self._straighten_backup = None
-        self.redraw()
 
     # ----- Zoom Preview -----
 
@@ -711,6 +624,14 @@ class MeasureAppGUI:
         facade.scale_on_motion(self, event)
         facade.draw_on_motion(self, event)
 
+    # ----- Buttons State -----
+    def update_buttons_state(self) -> None:
+        try:
+            state = tk.NORMAL if self.selected_polygon is not None else tk.DISABLED
+            self.straighten_btn.config(state=state)
+        except Exception:
+            pass
+
     # ----- Drawing and Display -----
     def redraw(self) -> None:
         """Clear and redraw the entire canvas, including image, polygons, and markers."""
@@ -744,6 +665,7 @@ class MeasureAppGUI:
                 coords.extend([px * self.zoom_level, py * self.zoom_level])
             outline_color = 'red' if idx == self.selected_polygon else 'blue'
             self.canvas.create_polygon(coords, fill='', outline=outline_color, width=2)
+
         # Draw current polygon (lines connecting points) while drawing
         if self.draw_mode and len(self.current_polygon) > 0:
             coords = []
@@ -780,7 +702,7 @@ class MeasureAppGUI:
                 det = v1[0] * v2[1] - v1[1] * v2[0]
                 ang = math.atan2(det, dot)
                 deg = abs(math.degrees(ang))
-                # Colour code: green for nearâ€‘90Â° (perpendicular), red otherwise
+                # Colour code: green for near‑90° (perpendicular), red otherwise
                 color = 'green' if abs(deg - 90) < 8 else 'red'
                 px_canvas, py_canvas = x * self.zoom_level, y * self.zoom_level
                 self.canvas.create_oval(
@@ -791,6 +713,8 @@ class MeasureAppGUI:
     # ----- Information Label -----
     def update_info_label(self) -> None:
         """Update the info label to reflect selected polygon's metrics and metadata."""
+        # Keep buttons in sync with selection
+        self.update_buttons_state()
         if self.selected_polygon is None:
             self.info_label.config(text="No polygon selected.")
             return
@@ -819,7 +743,6 @@ class MeasureAppGUI:
     def optimize_panels(self) -> None:
         facade.panels_optimize(self)
 
-
 def main() -> None:
     if tk is None:
         # Tkinter is unavailable (e.g. headless environment)
@@ -828,9 +751,5 @@ def main() -> None:
     app = MeasureAppGUI(root)
     root.mainloop()
 
-
 if __name__ == '__main__':
     main()
-
-
-

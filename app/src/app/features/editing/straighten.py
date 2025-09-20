@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 from typing import TYPE_CHECKING, List, Tuple
@@ -9,10 +9,70 @@ except Exception:  # pragma: no cover
     messagebox = None  # type: ignore
 
 if TYPE_CHECKING:
-    from .gui_client import MeasureAppGUI
+    try:
+        from ...gui_client import MeasureAppGUI  # type: ignore
+    except Exception:
+        from gui_client import MeasureAppGUI  # type: ignore
+
+
+def _rectangle_map(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """Project polygon vertices onto the minimal axis-aligned rectangle bounding them."""
+    if len(points) < 4:
+        return points[:]
+
+    closed = points[0] == points[-1]
+    pts = points[:-1] if closed else points[:]
+    if len(pts) < 4:
+        return points[:]
+
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    width = max_x - min_x
+    height = max_y - min_y
+    if width < 1e-9 or height < 1e-9:
+        return points[:]
+
+    perim_rect = 2.0 * (width + height)
+
+    # cumulative lengths along original polygon perimeter
+    seg_lengths = [0.0]
+    total = 0.0
+    for idx in range(len(pts)):
+        x1, y1 = pts[idx]
+        x2, y2 = pts[(idx + 1) % len(pts)]
+        total += math.hypot(x2 - x1, y2 - y1)
+        seg_lengths.append(total)
+    if total < 1e-9:
+        return points[:]
+
+    mapped: List[Tuple[float, float]] = []
+    for idx in range(len(pts)):
+        frac = seg_lengths[idx] / total
+        dist = frac * perim_rect
+        dist_mod = dist % perim_rect
+        if dist_mod <= width:
+            mapped.append((min_x + dist_mod, min_y))
+        elif dist_mod <= width + height:
+            mapped.append((max_x, min_y + (dist_mod - width)))
+        elif dist_mod <= 2 * width + height:
+            mapped.append((max_x - (dist_mod - (width + height)), max_y))
+        else:
+            mapped.append((min_x, max_y - (dist_mod - (2 * width + height))))
+
+    if closed:
+        mapped.append(mapped[0])
+
+    return mapped
+
+
+def _compute_straightened_points(pts: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    return _rectangle_map(pts)
 
 
 def straighten_polygon(app: "MeasureAppGUI") -> None:
+    """Straighten the selected polygon into its bounding rectangle."""
     if app.selected_polygon is None:
         if messagebox:
             messagebox.showwarning("Warning", "Select a polygon first.")
@@ -22,49 +82,17 @@ def straighten_polygon(app: "MeasureAppGUI") -> None:
         if messagebox:
             messagebox.showwarning("Warning", "Polygon must have at least 3 points.")
         return
-    app._straighten_backup = poly.points.copy()
-    pts = poly.points
-    n = len(pts)
-    green_indices: List[int] = []
-    for i in range(n):
-        x, y = pts[i]
-        x_prev, y_prev = pts[i - 1]
-        x_next, y_next = pts[(i + 1) % n]
-        v1 = (x - x_prev, y - y_prev)
-        v2 = (x_next - x, y_next - y)
-        dot = v1[0] * v2[0] + v1[1] * v2[1]
-        det = v1[0] * v2[1] - v1[1] * v2[0]
-        ang = math.atan2(det, dot)
-        deg = abs(math.degrees(ang))
-        if abs(deg - 90) < 8:
-            green_indices.append(i)
-    if len(green_indices) < 2:
-        if messagebox:
-            messagebox.showinfo("Straighten", "No sufficient green points to straighten.")
+    proposed = _compute_straightened_points(poly.points)
+    if proposed == poly.points:
         return
-    new_points: List[Tuple[float, float]] = []
-    for idx in range(len(green_indices)):
-        i1 = green_indices[idx]
-        i2 = green_indices[(idx + 1) % len(green_indices)]
-        x1, y1 = pts[i1]
-        new_points.append((x1, y1))
-        intermediates: List[int] = []
-        j = (i1 + 1) % n
-        while j != i2:
-            intermediates.append(j)
-            j = (j + 1) % n
-        if intermediates:
-            x2, y2 = pts[i2]
-            count = len(intermediates) + 1
-            for k, _ in enumerate(intermediates, start=1):
-                t = k / count
-                xm = x1 + t * (x2 - x1)
-                ym = y1 + t * (y2 - y1)
-                new_points.append((xm, ym))
-    if len(new_points) > 2:
-        new_points[-1] = new_points[0]
-    poly.points = new_points
+    app._straighten_backup = poly.points.copy()
+    poly.points = proposed
     poly.compute_metrics()
+    try:
+        if hasattr(app, "update_info_label"):
+            app.update_info_label()
+    except Exception:
+        pass
     app.redraw()
 
 
@@ -77,6 +105,9 @@ def undo_straighten(app: "MeasureAppGUI") -> None:
     poly.points = app._straighten_backup
     poly.compute_metrics()
     app._straighten_backup = None
+    try:
+        if hasattr(app, "update_info_label"):
+            app.update_info_label()
+    except Exception:
+        pass
     app.redraw()
-
-
