@@ -156,15 +156,7 @@ class MeasureAppGUI:
         self.canvas = tk.Canvas(canvas_frame, bg='gray', width=800, height=600)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         # Controls for pan, zoom and rotation beneath the canvas.
-        ctrl_canvas_frame = tk.Frame(canvas_frame)
-        ctrl_canvas_frame.pack(side=tk.BOTTOM, fill=tk.X)
-        self.pan_zoom_buttons: List[tk.Button] = []
-        self.add_pan_zoom_buttons(ctrl_canvas_frame)
         # Rotation buttons (delegate to facade to centralize behavior)
-        self.rotate_left_btn = tk.Button(ctrl_canvas_frame, text="Rotate Left", command=lambda: facade.rotate_left(self))
-        self.rotate_left_btn.pack(side=tk.LEFT, padx=2)
-        self.rotate_right_btn = tk.Button(ctrl_canvas_frame, text="Rotate Right", command=lambda: facade.rotate_right(self))
-        self.rotate_right_btn.pack(side=tk.LEFT, padx=2)
         # Control panel on the right for file loading and measurement options.
         side_frame = tk.Frame(main_frame)
         side_frame.pack(side=tk.RIGHT, fill=tk.Y)
@@ -181,6 +173,24 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Undo Straighten", command=lambda: facade.straighten_undo(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Vertex Move", command=lambda: facade.drag_undo(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Edit Metadata", command=lambda: facade.metadata_edit(self)).pack(fill=tk.X)
+
+        zoom_frame = tk.LabelFrame(side_frame, text="Zoom")
+        zoom_frame.pack(fill=tk.X, pady=(10, 0))
+        tk.Button(zoom_frame, text="+", command=lambda: facade.zoom_in(self)).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2, pady=2)
+        tk.Button(zoom_frame, text="-", command=lambda: facade.zoom_out(self)).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2, pady=2)
+
+        pan_frame = tk.LabelFrame(side_frame, text="Pan")
+        pan_frame.pack(pady=(10, 0))
+        tk.Button(pan_frame, text='^', command=lambda: facade.pan_canvas(self, 0, -50)).grid(row=0, column=1, padx=2, pady=2)
+        tk.Button(pan_frame, text='<<', command=lambda: facade.pan_canvas(self, -50, 0)).grid(row=1, column=0, padx=2, pady=2)
+        tk.Button(pan_frame, text='Center', command=self.center_view).grid(row=1, column=1, padx=2, pady=2)
+        tk.Button(pan_frame, text='>>', command=lambda: facade.pan_canvas(self, 50, 0)).grid(row=1, column=2, padx=2, pady=2)
+        tk.Button(pan_frame, text='v', command=lambda: facade.pan_canvas(self, 0, 50)).grid(row=2, column=1, padx=2, pady=2)
+
+        rotate_frame = tk.LabelFrame(side_frame, text="Rotate")
+        rotate_frame.pack(fill=tk.X, pady=(10, 0))
+        tk.Button(rotate_frame, text='CCW', command=lambda: facade.rotate_left(self)).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2, pady=2)
+        tk.Button(rotate_frame, text='CW', command=lambda: facade.rotate_right(self)).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2, pady=2)
         # Labels to display the current scale and selection info.
         self.scale_unit = "units"
         self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")
@@ -251,22 +261,28 @@ class MeasureAppGUI:
         self.snap_tolerance_deg: float = 3.0
 
     # ----- Pan/Zoom/Rotate Button Setup -----
-    def add_pan_zoom_buttons(self, frame: tk.Frame) -> None:
-        """Add pan and zoom buttons to the provided frame."""
-        # Clear any existing buttons (useful when reinitialising)
-        for btn in self.pan_zoom_buttons:
-            btn.destroy()
-        self.pan_zoom_buttons.clear()
-        # Zoom controls
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom In", command=lambda: facade.zoom_in(self)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom Out", command=lambda: facade.zoom_out(self)))
-        # Pan controls (move by 50 units at current zoom level)
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Left", command=lambda: facade.pan_canvas(self, -50, 0)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Right", command=lambda: facade.pan_canvas(self, 50, 0)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Up", command=lambda: facade.pan_canvas(self, 0, -50)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Down", command=lambda: facade.pan_canvas(self, 0, 50)))
-        for btn in self.pan_zoom_buttons:
-            btn.pack(side=tk.LEFT, padx=2)
+    def center_view(self) -> None:
+        """Center the current view on the loaded image."""
+        if self.display_image is None:
+            return
+        canvas = self.canvas
+        canvas.update_idletasks()
+        view_w = max(canvas.winfo_width(), 1)
+        view_h = max(canvas.winfo_height(), 1)
+        img_w = self.display_image.width
+        img_h = self.display_image.height
+        if img_w > 0:
+            if img_w <= view_w:
+                canvas.xview_moveto(0.0)
+            else:
+                left = (img_w - view_w) / 2
+                canvas.xview_moveto(left / img_w)
+        if img_h > 0:
+            if img_h <= view_h:
+                canvas.yview_moveto(0.0)
+            else:
+                top = (img_h - view_h) / 2
+                canvas.yview_moveto(top / img_h)
 
     # ----- Rotation Controls -----
     def rotate_left(self) -> None:
