@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 GUI client for the architectural diagram measurement tool.
 
@@ -13,8 +13,8 @@ installation on Windows, macOS or Linux with the Tk libraries installed).
 
 Features:
   * Load a PDF and display the first page on a canvas.
-  * Zoom in/out and pan the diagram via buttons or right‑click dragging.
-  * Rotate the diagram in 90° increments.
+  * Zoom in/out and pan the diagram via buttons or rightâ€‘click dragging.
+  * Rotate the diagram in 90Â° increments.
   * Draw room outlines as polygons directly on the diagram.
   * Set a reference scale by drawing a line of known length; scale lines
     remain visible after confirmation.
@@ -25,9 +25,9 @@ Features:
   * Generate a simple 3D extrusion of all rooms.
   * Optimise panel layout within a selected room using a simple tiling
     algorithm.
-  * Straighten polygons by converting near‑right angles to perfectly straight
+  * Straighten polygons by converting nearâ€‘right angles to perfectly straight
     segments, and undo the operation if necessary.
-  * Drag individual polygon vertices (non‑right angles) to fine‑tune shapes.
+  * Drag individual polygon vertices (nonâ€‘right angles) to fineâ€‘tune shapes.
   * Zoom preview window to help accurately place scale and polygon points.
 
 Note: This script requires Tkinter to be installed.  It cannot run in
@@ -84,16 +84,11 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+try:
+    from . import facade
+except Exception:
+    import facade  # type: ignore
 
-def _import_app_module(mod_name: str):
-    """Import a sibling module whether running as package or as script."""
-    try:
-        if __package__:
-            return importlib.import_module(f"{__package__}.{mod_name}")
-        return importlib.import_module(mod_name)
-    except Exception:
-        # Final fallback to absolute name
-        return importlib.import_module(mod_name)
 
 
 def pdf_page_to_image(pdf_path: str, page_number: int = 0) -> Image.Image:
@@ -189,10 +184,10 @@ class MeasureAppGUI:
         ctrl_canvas_frame.pack(side=tk.BOTTOM, fill=tk.X)
         self.pan_zoom_buttons: List[tk.Button] = []
         self.add_pan_zoom_buttons(ctrl_canvas_frame)
-        # Rotation buttons.
-        self.rotate_left_btn = tk.Button(ctrl_canvas_frame, text="Rotate Left", command=self.rotate_left)
+        # Rotation buttons (delegate to facade to centralize behavior)
+        self.rotate_left_btn = tk.Button(ctrl_canvas_frame, text="Rotate Left", command=lambda: facade.rotate_left(self))
         self.rotate_left_btn.pack(side=tk.LEFT, padx=2)
-        self.rotate_right_btn = tk.Button(ctrl_canvas_frame, text="Rotate Right", command=self.rotate_right)
+        self.rotate_right_btn = tk.Button(ctrl_canvas_frame, text="Rotate Right", command=lambda: facade.rotate_right(self))
         self.rotate_right_btn.pack(side=tk.LEFT, padx=2)
         # Control panel on the right for file loading and measurement options.
         side_frame = tk.Frame(main_frame)
@@ -205,8 +200,8 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Export CSV", command=self.export_csv).pack(fill=tk.X)
         tk.Button(side_frame, text="3D View", command=self.show_3d_view).pack(fill=tk.X)
         tk.Button(side_frame, text="Optimize Panels", command=self.optimize_panels).pack(fill=tk.X)
-        tk.Button(side_frame, text="Straighten Polygon", command=lambda: _import_app_module('straighten').straighten_polygon(self)).pack(fill=tk.X)
-        tk.Button(side_frame, text="Undo Straighten", command=lambda: _import_app_module('straighten').undo_straighten(self)).pack(fill=tk.X)
+        tk.Button(side_frame, text="Straighten Polygon", command=lambda: facade.straighten_do(self)).pack(fill=tk.X)
+        tk.Button(side_frame, text="Undo Straighten", command=lambda: facade.straighten_undo(self)).pack(fill=tk.X)
         # Labels to display the current scale and selection info.
         self.scale_unit = "units"
         self.scale_label = tk.Label(side_frame, text=f"Scale: 1.0 {self.scale_unit}/pixel")
@@ -217,15 +212,15 @@ class MeasureAppGUI:
         # Left mouse button handles drawing polygons and selecting regions.
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         # Right mouse button for panning via scan functionality.
-        self.canvas.bind("<ButtonPress-3>", self.on_pan_start)
-        self.canvas.bind("<B3-Motion>", self.on_pan_move)
+        self.canvas.bind("<ButtonPress-3>", lambda e: facade.pan_on_start(self, e))
+        self.canvas.bind("<B3-Motion>", lambda e: facade.pan_on_move(self, e))
         # Motion event for zoom preview (enabled only in drawing/scale modes).
         self.canvas.bind("<Motion>", self.on_canvas_motion)
         # Dragging vertices (left button press, move and release) outside of draw/scale mode.
         # Use add='+' to avoid overwriting the existing <Button-1> binding
-        self.canvas.bind("<ButtonPress-1>", self.on_drag_start, add="+")
-        self.canvas.bind("<B1-Motion>", self.on_drag_move)
-        self.canvas.bind("<ButtonRelease-1>", self.on_drag_end)
+        self.canvas.bind("<ButtonPress-1>", lambda e: facade.drag_start(self, e), add="+")
+        self.canvas.bind("<B1-Motion>", lambda e: facade.drag_move(self, e))
+        self.canvas.bind("<ButtonRelease-1>", lambda e: facade.drag_end(self, e))
         # Data structures and state variables.
         self.image: Optional[Image.Image] = None  # Original PDF page (resized to fit)
         self.photo: Optional[ImageTk.PhotoImage] = None  # PhotoImage for Tkinter display
@@ -272,19 +267,19 @@ class MeasureAppGUI:
             btn.destroy()
         self.pan_zoom_buttons.clear()
         # Zoom controls
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom In", command=self.zoom_in))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom Out", command=self.zoom_out))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom In", command=lambda: facade.zoom_in(self)))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Zoom Out", command=lambda: facade.zoom_out(self)))
         # Pan controls (move by 50 units at current zoom level)
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Left", command=lambda: self.pan_canvas(-50, 0)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Right", command=lambda: self.pan_canvas(50, 0)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Up", command=lambda: self.pan_canvas(0, -50)))
-        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Down", command=lambda: self.pan_canvas(0, 50)))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Left", command=lambda: facade.pan_canvas(self, -50, 0)))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Right", command=lambda: facade.pan_canvas(self, 50, 0)))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Up", command=lambda: facade.pan_canvas(self, 0, -50)))
+        self.pan_zoom_buttons.append(tk.Button(frame, text="Pan Down", command=lambda: facade.pan_canvas(self, 0, 50)))
         for btn in self.pan_zoom_buttons:
             btn.pack(side=tk.LEFT, padx=2)
 
     # ----- Rotation Controls -----
     def rotate_left(self) -> None:
-        """Rotate the image 90° counter‑clockwise."""
+        """Rotate the image 90Â° counterâ€‘clockwise."""
         if self.image is None:
             return
         # Update rotation state and reapply rotation
@@ -292,7 +287,7 @@ class MeasureAppGUI:
         self.apply_rotation()
 
     def rotate_right(self) -> None:
-        """Rotate the image 90° clockwise."""
+        """Rotate the image 90Â° clockwise."""
         if self.image is None:
             return
         self.image_rotation = (self.image_rotation + 90) % 360
@@ -397,9 +392,9 @@ class MeasureAppGUI:
         self.canvas.xview_scroll(int(dx), 'units')
         self.canvas.yview_scroll(int(dy), 'units')
 
-    # ----- Panning via Right‑click Dragging -----
+    # ----- Panning via Rightâ€‘click Dragging -----
     def on_pan_start(self, event) -> None:
-        """Record the starting point for a panning operation (right‑click)."""
+        """Record the starting point for a panning operation (rightâ€‘click)."""
         self.canvas.scan_mark(event.x, event.y)
 
     def on_pan_move(self, event) -> None:
@@ -408,33 +403,26 @@ class MeasureAppGUI:
 
     # ----- File and Configuration Management -----
     def load_pdf(self) -> None:
-        file_io = _import_app_module('file_io')
-        file_io.load_pdf(self)
+        facade.file_load_pdf(self)
 
     def load_config(self) -> None:
-        file_io = _import_app_module('file_io')
-        file_io.load_config(self)
+        facade.file_load_config(self)
 
     def save_config(self) -> None:
-        file_io = _import_app_module('file_io')
-        file_io.save_config(self)
+        facade.file_save_config(self)
 
     # ----- Mode Selection -----
     def set_scale_mode(self) -> None:
-        scale_mod = _import_app_module('scale')
-        scale_mod.set_scale_mode(self)
+        facade.scale_set_mode(self)
 
     def clear_scale_preview(self) -> None:
-        scale_mod = _import_app_module('scale')
-        scale_mod.clear_scale_preview(self)
+        facade.scale_clear_preview(self)
 
     def exit_scale_mode(self) -> None:
-        scale_mod = _import_app_module('scale')
-        scale_mod.exit_scale_mode(self)
+        facade.scale_exit_mode(self)
 
     def cancel_scale_mode(self, event=None) -> None:
-        scale_mod = _import_app_module('scale')
-        scale_mod.cancel_scale_mode(self)
+        facade.scale_cancel_mode(self)
 
     def _prompt_scale_unit(self) -> Optional[str]:
         """Prompt the user for the unit label; return None if cancelled."""
@@ -465,8 +453,7 @@ class MeasureAppGUI:
             return real_len
 
     def set_draw_mode(self) -> None:
-        draw_mod = _import_app_module('draw')
-        draw_mod.set_draw_mode(self)
+        facade.draw_set_mode(self)
 
     # ----- Canvas Click Handling -----
     def on_canvas_click(self, event) -> None:
@@ -477,19 +464,17 @@ class MeasureAppGUI:
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
         # Scale mode: collect two points and compute scale factor
-        scale_mod = _import_app_module('scale')
         if self.scale_mode:
-            if scale_mod.scale_on_canvas_click(self, event):
+            if facade.scale_on_canvas_click(self, event):
                 return
             return
         # Draw mode: build up points for a new polygon
         if self.draw_mode:
-            draw_mod = _import_app_module('draw')
-            if draw_mod.draw_on_canvas_click(self, event):
+            if facade.draw_on_canvas_click(self, event):
                 return
         # Not in draw or scale mode: selection of an existing polygon
         self.selected_polygon = None
-        # Convert click to image coordinates for point‑in‑polygon test
+        # Convert click to image coordinates for pointâ€‘inâ€‘polygon test
         point = (x / self.zoom_level, y / self.zoom_level)
         for idx, poly in enumerate(self.polygons):
             if point_in_polygon(point, poly.points):
@@ -502,12 +487,11 @@ class MeasureAppGUI:
 
     # ----- Polygon Completion -----
     def finish_polygon(self) -> None:
-        draw_mod = _import_app_module('draw')
-        draw_mod.finish_polygon(self)
+        facade.draw_finish(self)
 
     # ----- Dragging Polygon Vertices -----
     def on_drag_start(self, event) -> None:
-        """Initiate dragging of a polygon vertex (non‑right angles only)."""
+        """Initiate dragging of a polygon vertex (nonâ€‘right angles only)."""
         if self.image is None or self.selected_polygon is None:
             return
         # Do not start dragging while in scale or draw mode
@@ -515,7 +499,7 @@ class MeasureAppGUI:
             return
         x = self.canvas.canvasx(event.x)
         y = self.canvas.canvasy(event.y)
-        # Check if click is on a vertex of the selected polygon and if that vertex is a non‑right angle
+        # Check if click is on a vertex of the selected polygon and if that vertex is a nonâ€‘right angle
         poly = self.polygons[self.selected_polygon]
         pts = poly.points
         n = len(pts)
@@ -525,7 +509,7 @@ class MeasureAppGUI:
             canvas_y = py * self.zoom_level
             # Hit test within a small radius (8 pixels)
             if abs(x - canvas_x) <= 8 and abs(y - canvas_y) <= 8:
-                # Compute angle at this vertex; if it's not near 90°, allow dragging
+                # Compute angle at this vertex; if it's not near 90Â°, allow dragging
                 x_prev, y_prev = pts[i - 1]
                 x_next, y_next = pts[(i + 1) % n]
                 v1 = (px - x_prev, py - y_prev)
@@ -569,7 +553,7 @@ class MeasureAppGUI:
 
     # ----- Straightening Polygons -----
     def straighten_polygon(self) -> None:
-        """Straighten the selected polygon by converting segments between near‑right angles to straight lines."""
+        """Straighten the selected polygon by converting segments between nearâ€‘right angles to straight lines."""
         if self.selected_polygon is None:
             messagebox.showwarning("Warning", "Select a polygon first.")
             return
@@ -581,7 +565,7 @@ class MeasureAppGUI:
         self._straighten_backup = poly.points.copy()
         pts = poly.points
         n = len(pts)
-        # Identify indices of vertices with near‑right angles (within ±8° of 90°)
+        # Identify indices of vertices with nearâ€‘right angles (within Â±8Â° of 90Â°)
         green_indices = []
         for i in range(n):
             x, y = pts[i]
@@ -595,7 +579,7 @@ class MeasureAppGUI:
             deg = abs(math.degrees(ang))
             if abs(deg - 90) < 8:
                 green_indices.append(i)
-        # Need at least two right‑angle vertices to straighten segments between them
+        # Need at least two rightâ€‘angle vertices to straighten segments between them
         if len(green_indices) < 2:
             messagebox.showinfo("Straighten", "No sufficient green points to straighten.")
             return
@@ -707,8 +691,7 @@ class MeasureAppGUI:
             self.zoom_preview_label = None
 
     def on_canvas_motion(self, event) -> None:
-        scale_mod = _import_app_module('scale')
-        scale_mod.scale_on_motion(self, event)
+        facade.scale_on_motion(self, event)
 
     # ----- Drawing and Display -----
     def redraw(self) -> None:
@@ -765,7 +748,7 @@ class MeasureAppGUI:
                 det = v1[0] * v2[1] - v1[1] * v2[0]
                 ang = math.atan2(det, dot)
                 deg = abs(math.degrees(ang))
-                # Colour code: green for near‑90° (perpendicular), red otherwise
+                # Colour code: green for nearâ€‘90Â° (perpendicular), red otherwise
                 color = 'green' if abs(deg - 90) < 8 else 'red'
                 px_canvas, py_canvas = x * self.zoom_level, y * self.zoom_level
                 self.canvas.create_oval(
@@ -794,18 +777,15 @@ class MeasureAppGUI:
 
     # ----- Exporting Data -----
     def export_csv(self) -> None:
-        from . import export_mod
-        export_mod.export_csv(self)
+        facade.export_csv(self)
 
     # ----- 3D Visualisation -----
     def show_3d_view(self) -> None:
-        from . import three_d as three_d_mod
-        three_d_mod.show_3d_view(self)
+        facade.three_d_show(self)
 
     # ----- Panel Layout Optimisation -----
     def optimize_panels(self) -> None:
-        from . import panels as panels_mod
-        panels_mod.optimize_panels(self)
+        facade.panels_optimize(self)
 
 
 def main() -> None:
@@ -819,3 +799,5 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+
+
