@@ -187,7 +187,9 @@ class MeasureAppGUI:
             'extrusion_height': 1.0
         }
         # Scale preview state
-        self.scale_preview_line_id: Optional[int] = None  # Canvas ID for rubber-band preview
+        self.scale_preview_line_id: Optional[int] = None  # Canvas ID for scale rubber-band preview
+        # Draw preview state
+        self.draw_preview_line_id: Optional[int] = None  # Canvas ID for draw rubber-band preview
         # Zoom/pan/rotation state
         self.zoom_level: float = 1.0
         self.image_rotation: int = 0  # Rotation in degrees (0, 90, 180, 270)
@@ -637,6 +639,7 @@ class MeasureAppGUI:
 
     def on_canvas_motion(self, event) -> None:
         facade.scale_on_motion(self, event)
+        facade.draw_on_motion(self, event)
 
     # ----- Drawing and Display -----
     def redraw(self) -> None:
@@ -676,7 +679,21 @@ class MeasureAppGUI:
             coords = []
             for px, py in self.current_polygon:
                 coords.extend([px * self.zoom_level, py * self.zoom_level])
-            self.canvas.create_line(coords, fill='green', width=2)
+            if len(coords) >= 4:
+                self.canvas.create_line(coords, fill='green', width=2)
+            for idx, (px, py) in enumerate(self.current_polygon):
+                cx = px * self.zoom_level
+                cy = py * self.zoom_level
+                radius = 6 + (2 if idx == 0 else 0)
+                self.canvas.create_oval(
+                    cx - radius,
+                    cy - radius,
+                    cx + radius,
+                    cy + radius,
+                    fill='red',
+                    outline='white',
+                    width=2,
+                )
         # Highlight vertices of the selected polygon with angle information
         if self.selected_polygon is not None:
             poly = self.polygons[self.selected_polygon]

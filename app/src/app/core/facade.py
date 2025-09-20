@@ -31,12 +31,16 @@ try:
     from ..features.editing.draw import (
         set_draw_mode as draw_set_mode,
         draw_on_canvas_click as draw_on_canvas_click,
+        draw_on_motion as draw_on_motion,
+        clear_draw_preview as draw_clear_preview,
         finish_polygon as draw_finish,
     )
 except Exception:
     from features.editing.draw import (
         set_draw_mode as draw_set_mode,
         draw_on_canvas_click as draw_on_canvas_click,
+        draw_on_motion as draw_on_motion,
+        clear_draw_preview as draw_clear_preview,
         finish_polygon as draw_finish,
     )
 

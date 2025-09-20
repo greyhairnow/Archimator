@@ -81,6 +81,7 @@ def load_pdf(app: "MeasureAppGUI") -> None:
     app.selected_polygon = None
     app.draw_mode = False
     app.scale_mode = False
+    app.draw_preview_line_id = None
     app._straighten_backup = None
     app.hide_zoom_preview()
 
