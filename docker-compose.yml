@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  gui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: archimator:latest
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: ["python", "app/src/app/gui_client.py"]
+    # Allow the container to access the host X server (Linux)
+    # Before running, execute on the host: xhost +si:localuser:root
