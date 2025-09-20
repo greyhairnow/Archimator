@@ -246,6 +246,7 @@ class MeasureAppGUI:
         self.drag_point_index: Optional[int] = None
         self.drag_start_x: float = 0.0
         self.drag_start_y: float = 0.0
+        self._last_pointer_canvas: Tuple[float, float] = (0.0, 0.0)
         self.panel_tiles_overlay: Optional[dict] = None
         self.snap_tolerance_deg: float = 3.0
 
@@ -657,6 +658,10 @@ class MeasureAppGUI:
             pass
 
     def on_canvas_motion(self, event) -> None:
+        try:
+            self._last_pointer_canvas = (float(event.x), float(event.y))
+        except Exception:
+            pass
         facade.scale_on_motion(self, event)
         facade.draw_on_motion(self, event)
 
