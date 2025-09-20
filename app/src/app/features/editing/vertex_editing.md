@@ -193,6 +193,6 @@ _As a user, I want to undo the last vertex movement so I can correct mistakes ea
 
 ## 🧭 Mock UI Flow Notes
 - Start drag: click a handle on the selected polygon. Zoom preview appears.
-- During drag: dashed orange connectors to neighbors; turns lime on snap; “Straight snap” tooltip shows under the angle label.
+- During drag: dashed orange connectors to neighbors; turns lime on snap; “Straight snap” tooltip shows under the angle label. Hold Shift or Ctrl to enable snapping.
 - Drop: artifacts clear; zoom preview hides. Use “Undo Vertex Move” to revert the last drag.
 - Snap tolerance: adjust via “Snap tol (°)” control in the side panel; accepts 0–30.

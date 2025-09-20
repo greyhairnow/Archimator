@@ -148,6 +148,7 @@ class MeasureAppGUI:
         tk.Button(side_frame, text="Straighten Polygon", command=lambda: facade.straighten_do(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Straighten", command=lambda: facade.straighten_undo(self)).pack(fill=tk.X)
         tk.Button(side_frame, text="Undo Vertex Move", command=lambda: facade.drag_undo(self)).pack(fill=tk.X)
+        tk.Button(side_frame, text="Edit Metadata", command=lambda: facade.metadata_edit(self)).pack(fill=tk.X)
         # Snap tolerance control for vertex drag
         tol_frame = tk.Frame(side_frame)
         tol_frame.pack(fill=tk.X)
@@ -170,6 +171,9 @@ class MeasureAppGUI:
         self.scale_label.pack(fill=tk.X, pady=(10, 0))
         self.info_label = tk.Label(side_frame, text="No polygon selected.")
         self.info_label.pack(fill=tk.X)
+        # Status bar (messages like snap notifications)
+        self.status_label = tk.Label(side_frame, text="", fg='gray')
+        self.status_label.pack(fill=tk.X)
         # Bind mouse events for drawing, panning and dragging.
         # Left mouse button handles drawing polygons and selecting regions.
         self.canvas.bind("<Button-1>", self.on_canvas_click)
@@ -693,6 +697,15 @@ class MeasureAppGUI:
             self.zoom_preview_win.destroy()
             self.zoom_preview_win = None
             self.zoom_preview_label = None
+
+    def show_status_message(self, msg: str, duration_ms: int = 1200) -> None:
+        """Show a transient status message in the side panel."""
+        try:
+            self.status_label.config(text=msg)
+            if duration_ms > 0:
+                self.root.after(duration_ms, lambda: self.status_label.config(text=""))
+        except Exception:
+            pass
 
     def on_canvas_motion(self, event) -> None:
         facade.scale_on_motion(self, event)

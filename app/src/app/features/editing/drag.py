@@ -11,54 +11,56 @@ if TYPE_CHECKING:
 
 
 def on_drag_start(app: "MeasureAppGUI", event) -> None:
-    if app.image is None or app.selected_polygon is None:
+    if app.image is None:
         return
     if app.scale_mode or app.draw_mode:
         return
     x = app.canvas.canvasx(event.x)
     y = app.canvas.canvasy(event.y)
+    # Find a vertex under cursor across all polygons
+    hit_poly_idx = None
+    hit_vertex_idx = None
+    for pidx, poly_try in enumerate(app.polygons):
+        for i, (px, py) in enumerate(poly_try.points):
+            canvas_x = px * app.zoom_level
+            canvas_y = py * app.zoom_level
+            if abs(x - canvas_x) <= 8 and abs(y - canvas_y) <= 8:
+                hit_poly_idx = pidx
+                hit_vertex_idx = i
+                break
+        if hit_poly_idx is not None:
+            break
+    if hit_poly_idx is None or hit_vertex_idx is None:
+        return
+    # Select polygon and start drag on that vertex
+    app.selected_polygon = hit_poly_idx
     poly = app.polygons[app.selected_polygon]
     pts = poly.points
-    n = len(pts)
-    for i in range(n):
-        px, py = pts[i]
-        canvas_x = px * app.zoom_level
-        canvas_y = py * app.zoom_level
-        if abs(x - canvas_x) <= 8 and abs(y - canvas_y) <= 8:
-            x_prev, y_prev = pts[i - 1]
-            x_next, y_next = pts[(i + 1) % n]
-            v1 = (px - x_prev, py - y_prev)
-            v2 = (x_next - px, y_next - py)
-            dot = v1[0] * v2[0] + v1[1] * v2[1]
-            det = v1[0] * v2[1] - v1[1] * v2[0]
-            ang = math.atan2(det, dot)
-            deg = abs(math.degrees(ang))
-            # Allow dragging any vertex; app originally limited near-90. Keep this permissive.
-            if True:
-                app.dragging = True
-                app.drag_point_index = i
-                app.drag_start_x = x
-                app.drag_start_y = y
-                app.canvas.config(cursor="hand2")
-                # Backup full polygon for undo of movement
-                try:
-                    app._vertex_move_backup = (
-                        app.selected_polygon,
-                        i,
-                        list(pts),
-                    )
-                except Exception:
-                    pass
-                # Store original vertex for elastic spring
-                app._drag_original_vertex = (px, py)
-                # Initialize elastic artifacts container
-                app._drag_artifacts = getattr(app, "_drag_artifacts", {"lines": [], "angle_text": None, "spring": None, "snap_text": None})
-                # Show zoom preview immediately
-                try:
-                    app.show_zoom_preview(event.x, event.y)
-                except Exception:
-                    pass
-                break
+    i = hit_vertex_idx
+    px, py = pts[i]
+    app.dragging = True
+    app.drag_point_index = i
+    app.drag_start_x = x
+    app.drag_start_y = y
+    app.canvas.config(cursor="hand2")
+    # Backup full polygon for undo of movement
+    try:
+        app._vertex_move_backup = (
+            app.selected_polygon,
+            i,
+            list(pts),
+        )
+    except Exception:
+        pass
+    # Store original vertex for elastic spring
+    app._drag_original_vertex = (px, py)
+    # Initialize elastic artifacts container
+    app._drag_artifacts = getattr(app, "_drag_artifacts", {"lines": [], "angle_text": None, "spring": None, "snap_text": None})
+    # Show zoom preview immediately
+    try:
+        app.show_zoom_preview(event.x, event.y)
+    except Exception:
+        pass
 
 
 def on_drag_move(app: "MeasureAppGUI", event) -> None:
@@ -89,7 +91,10 @@ def on_drag_move(app: "MeasureAppGUI", event) -> None:
     TOL_DEG = float(getattr(app, "snap_tolerance_deg", 3.0))
     deg = angle_deg((x_prev, y_prev), (new_x, new_y), (x_next, y_next))
     snapped = False
-    if abs(deg - 180.0) <= TOL_DEG or abs(deg) <= TOL_DEG:
+    # Snap only if Shift or Ctrl is pressed
+    state = getattr(event, "state", 0)
+    snap_mod_down = bool(state & 0x0001) or bool(state & 0x0004)
+    if snap_mod_down and (abs(deg - 180.0) <= TOL_DEG or abs(deg) <= TOL_DEG):
         # Projection of point B onto line AC
         ax, ay = x_prev, y_prev
         cx, cy = x_next, y_next
@@ -167,6 +172,16 @@ def on_drag_move(app: "MeasureAppGUI", event) -> None:
         if snapped:
             snap_id = app.canvas.create_text(cx + 12, cy + 8, text="Straight snap", fill='lime', font=("TkDefaultFont", 9))
             arts["snap_text"] = snap_id
+        # Keep zoom preview following and emit status on first snap
+        try:
+            if snapped and not getattr(app, "_snap_message_shown", False):
+                if hasattr(app, "show_status_message"):
+                    app.show_status_message("Snapped to straight")
+                app._snap_message_shown = True
+            if not snapped:
+                app._snap_message_shown = False
+        except Exception:
+            pass
         # Keep zoom preview following
         try:
             app.show_zoom_preview(event.x, event.y)

@@ -34,6 +34,7 @@ try:
         draw_on_motion as draw_on_motion,
         clear_draw_preview as draw_clear_preview,
         finish_polygon as draw_finish,
+        edit_polygon_metadata as metadata_edit,
     )
 except Exception:
     from features.editing.draw import (
@@ -42,6 +43,7 @@ except Exception:
         draw_on_motion as draw_on_motion,
         clear_draw_preview as draw_clear_preview,
         finish_polygon as draw_finish,
+        edit_polygon_metadata as metadata_edit,
     )
 
 # File I/O

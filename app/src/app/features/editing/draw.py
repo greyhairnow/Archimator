@@ -126,6 +126,96 @@ def draw_on_canvas_click(app: "MeasureAppGUI", event) -> bool:
     return True
 
 
+def _prompt_room_metadata(app: "MeasureAppGUI") -> tuple[str, str] | None:
+    """Show a single dialog to collect Room ID and Name with basic validation.
+    Returns (id, name) or None if cancelled.
+    """
+    try:
+        import tkinter as tk
+        from tkinter import simpledialog as sd
+    except Exception:
+        return ("", "")
+
+    class MetaDialog(sd.Dialog):
+        def body(self, master):  # type: ignore[override]
+            tk.Label(master, text="Room ID:").grid(row=0, column=0, sticky="e")
+            tk.Label(master, text="Room Name:").grid(row=1, column=0, sticky="e")
+            self.id_var = tk.StringVar()
+            self.name_var = tk.StringVar()
+            self.id_entry = tk.Entry(master, textvariable=self.id_var)
+            self.name_entry = tk.Entry(master, textvariable=self.name_var)
+            self.id_entry.grid(row=0, column=1, padx=6, pady=4)
+            self.name_entry.grid(row=1, column=1, padx=6, pady=4)
+            return self.id_entry
+
+        def validate(self) -> bool:  # type: ignore[override]
+            rid = self.id_var.get().strip()
+            rname = self.name_var.get().strip()
+            if not rid or not rname:
+                try:
+                    if messagebox:
+                        messagebox.showwarning("Validation", "Room ID and Name are required.")
+                except Exception:
+                    pass
+                return False
+            return True
+
+        def apply(self) -> None:  # type: ignore[override]
+            self.result = (self.id_var.get().strip(), self.name_var.get().strip())
+
+    dlg = MetaDialog(app.root, title="Room Metadata")
+    return getattr(dlg, "result", None)
+
+
+def edit_polygon_metadata(app: "MeasureAppGUI") -> None:
+    """Edit metadata for the currently selected polygon using the same dialog."""
+    if app.selected_polygon is None:
+        if messagebox:
+            messagebox.showwarning("Warning", "No polygon selected.")
+        return
+    poly = app.polygons[app.selected_polygon]
+    try:
+        import tkinter as tk
+        from tkinter import simpledialog as sd
+    except Exception:
+        return
+
+    class MetaDialog(sd.Dialog):
+        def body(self, master):  # type: ignore[override]
+            tk.Label(master, text="Room ID:").grid(row=0, column=0, sticky="e")
+            tk.Label(master, text="Room Name:").grid(row=1, column=0, sticky="e")
+            self.id_var = tk.StringVar(value=str(poly.metadata.get('id', '')))
+            self.name_var = tk.StringVar(value=str(poly.metadata.get('name', '')))
+            self.id_entry = tk.Entry(master, textvariable=self.id_var)
+            self.name_entry = tk.Entry(master, textvariable=self.name_var)
+            self.id_entry.grid(row=0, column=1, padx=6, pady=4)
+            self.name_entry.grid(row=1, column=1, padx=6, pady=4)
+            return self.id_entry
+
+        def validate(self) -> bool:  # type: ignore[override]
+            rid = self.id_var.get().strip()
+            rname = self.name_var.get().strip()
+            if not rid or not rname:
+                try:
+                    if messagebox:
+                        messagebox.showwarning("Validation", "Room ID and Name are required.")
+                except Exception:
+                    pass
+                return False
+            return True
+
+        def apply(self) -> None:  # type: ignore[override]
+            self.result = (self.id_var.get().strip(), self.name_var.get().strip())
+
+    dlg = MetaDialog(app.root, title="Edit Room Metadata")
+    result = getattr(dlg, "result", None)
+    if result is None:
+        return
+    room_id, room_name = result
+    poly.metadata = {'id': room_id, 'name': room_name}
+    app.update_info_label()
+
+
 def finish_polygon(app: "MeasureAppGUI") -> None:
     if len(app.current_polygon) < 3:
         app.current_polygon.clear()
@@ -136,8 +226,12 @@ def finish_polygon(app: "MeasureAppGUI") -> None:
         return
     poly = PolygonData(points=app.current_polygon.copy())
     poly.compute_metrics()
-    room_id = (simpledialog.askstring("Metadata", "Enter Room ID:") or '') if simpledialog else ''
-    room_name = (simpledialog.askstring("Metadata", "Enter Room Name:") or '') if simpledialog else ''
+    result = _prompt_room_metadata(app)
+    if result is None:
+        # If cancelled, default to empty strings
+        room_id, room_name = "", ""
+    else:
+        room_id, room_name = result
     poly.metadata = {'id': room_id, 'name': room_name}
     app.polygons.append(poly)
     app.current_polygon.clear()
