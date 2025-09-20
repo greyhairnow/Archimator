@@ -1,0 +1,32 @@
+{
+  "name": "Archimator GUI",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspaces/Archimator",
+  "runArgs": [
+    "--env", "DISPLAY=${localEnv:DISPLAY}",
+    "--volume", "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+  ],
+  "remoteEnv": {
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "PYTHONPATH": "/workspaces/Archimator/app/src"
+  },
+  "postCreateCommand": "pip install --upgrade pip",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.formatting.provider": "black",
+        "python.linting.enabled": true,
+        "python.linting.mypyEnabled": false
+      }
+    }
+  }
+}

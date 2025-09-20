@@ -72,3 +72,23 @@ The application is a Tkinter GUI; running it in a container without an X server
 will exit immediately. If you need automated workflows (e.g. export CSV without
 rendering), consider creating a CLI entry point that does not require Tkinter
 and reusing the same base image.
+
+## VS Code Dev Container
+
+A `.devcontainer/devcontainer.json` file is provided so you can open the project
+inside VS Code using **Remote - Containers** or **Dev Containers**. The config
+reuses the project Dockerfile, giving you the same dependency stack that the
+runtime image uses.
+
+Steps:
+
+1. Install the VS Code Dev Containers extension.
+2. From VS Code, run **Dev Containers: Reopen in Container**.
+3. Ensure your host X server is running and that the `/tmp/.X11-unix` socket is
+authorized (`xhost +si:localuser:root` on Linux) so the Tkinter window can
+render from inside the container.
+4. Launch the GUI from the VS Code terminal with `python app/src/app/gui_client.py`.
+
+If you are on Windows or macOS, adjust the `DISPLAY` variable in
+`.devcontainer/devcontainer.json` to match your X server host (for example
+`host.docker.internal:0`) and expose the X11 port if required.
