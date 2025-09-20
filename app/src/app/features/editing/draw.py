@@ -35,6 +35,15 @@ DRAW_PREVIEW_WIDTH: int = 4
 CLOSE_THRESHOLD_PX: int = 10
 
 
+# Palette for completed polygon overlays
+POLYGON_FILL_COLORS: tuple[str, ...] = (
+    '#9bd6ff',  # pale blue
+    '#c5f5c9',  # pale green
+    '#ffe0b3',  # pale orange
+    '#f7c6ff',  # pale violet
+)
+
+
 def clear_draw_preview(app: "MeasureAppGUI") -> None:
     line_id = getattr(app, 'draw_preview_line_id', None)
     if line_id is not None:
@@ -214,6 +223,7 @@ def edit_polygon_metadata(app: "MeasureAppGUI") -> None:
     room_id, room_name = result
     poly.metadata = {'id': room_id, 'name': room_name}
     app.update_info_label()
+    app.redraw()
 
 
 def finish_polygon(app: "MeasureAppGUI") -> None:
@@ -232,7 +242,9 @@ def finish_polygon(app: "MeasureAppGUI") -> None:
         room_id, room_name = "", ""
     else:
         room_id, room_name = result
-    poly.metadata = {'id': room_id, 'name': room_name}
+    poly.metadata = {'id': room_id.strip(), 'name': room_name.strip()}
+    fill_index = len(app.polygons) % len(POLYGON_FILL_COLORS)
+    poly.fill_color = POLYGON_FILL_COLORS[fill_index]
     app.polygons.append(poly)
     app.current_polygon.clear()
     app.draw_mode = False

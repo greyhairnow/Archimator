@@ -42,6 +42,41 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Tuple, Optional
 
+# Soft fill colours for polygon overlays (cycled per polygon)
+POLYGON_FILL_COLORS: List[str] = [
+    '#9bd6ff',  # pale blue
+    '#c5f5c9',  # pale green
+    '#ffe0b3',  # pale orange
+    '#f7c6ff',  # pale violet
+]
+
+
+def _polygon_centroid(points: List[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
+    """Return polygon centroid; fall back to vertex average for near-zero area."""
+    if not points:
+        return None
+    area_acc = 0.0
+    cx_acc = 0.0
+    cy_acc = 0.0
+    n = len(points)
+    for i in range(n):
+        x0, y0 = points[i]
+        x1, y1 = points[(i + 1) % n]
+        cross = x0 * y1 - x1 * y0
+        area_acc += cross
+        cx_acc += (x0 + x1) * cross
+        cy_acc += (y0 + y1) * cross
+    area = area_acc / 2.0
+    if abs(area) < 1e-9:
+        avg_x = sum(p[0] for p in points) / n
+        avg_y = sum(p[1] for p in points) / n
+        return (avg_x, avg_y)
+    centroid_x = cx_acc / (6.0 * area)
+    centroid_y = cy_acc / (6.0 * area)
+    return (centroid_x, centroid_y)
+
+
+
 # Ensure required third-party packages are available before proceeding.
 REQUIRED_PACKAGES = {
     "pymupdf": "pymupdf",
@@ -659,13 +694,38 @@ class MeasureAppGUI:
             self.canvas.create_oval(px_canvas - 12, py_canvas - 12, px_canvas + 12, py_canvas + 12,
                                     fill='blue', outline='black', width=3)
         # Draw completed polygons
+
         for idx, poly in enumerate(self.polygons):
             coords = []
             for px, py in poly.points:
                 coords.extend([px * self.zoom_level, py * self.zoom_level])
+            fill_colour = getattr(poly, 'fill_color', POLYGON_FILL_COLORS[idx % len(POLYGON_FILL_COLORS)])
+            self.canvas.create_polygon(
+                coords,
+                fill=fill_colour,
+                outline='',
+                width=0,
+                stipple='gray12'
+            )
             outline_color = 'red' if idx == self.selected_polygon else 'blue'
             self.canvas.create_polygon(coords, fill='', outline=outline_color, width=2)
-
+            meta = getattr(poly, 'metadata', {}) or {}
+            room_id = str(meta.get('id') or '').strip()
+            room_name = str(meta.get('name') or '').strip()
+            label_lines = [
+                f"ID: {room_id or 'N/A'}",
+                f"Name: {room_name or 'N/A'}",
+            ]
+            label_text = "\n".join(label_lines)
+            centroid = _polygon_centroid(poly.points)
+            if centroid:
+                cx, cy = centroid
+                cx_canvas = cx * self.zoom_level
+                cy_canvas = cy * self.zoom_level
+                font_size = max(9, int(12 * (self.zoom_level ** 0.3)))
+                font = ("TkDefaultFont", font_size, "bold")
+                self.canvas.create_text(cx_canvas + 1, cy_canvas + 1, text=label_text, fill='white', font=font, justify=tk.CENTER)
+                self.canvas.create_text(cx_canvas, cy_canvas, text=label_text, fill='black', font=font, justify=tk.CENTER)
         # Draw current polygon (lines connecting points) while drawing
         if self.draw_mode and len(self.current_polygon) > 0:
             coords = []
